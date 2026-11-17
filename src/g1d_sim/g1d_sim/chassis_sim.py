@@ -49,7 +49,7 @@ class ChassisSim(Node):
         super().__init__("chassis_sim", **kwargs)
         p = lambda n, v: self.declare_parameter(n, v).value  # noqa: E731
         self.boxes = load_world(resolve_world(p("world", "empty")))
-        start = [float(v) for v in p("start", [0.0, 0.0, 0.0])]
+        start = [float(p("start_x", 0.0)), float(p("start_y", 0.0)), float(p("start_yaw", 0.0))]
         self.rate = float(p("rate_hz", 100.0))      # integer divisors for 20 Hz odom / 10 Hz scan
         self.odom_every = max(1, round(self.rate / float(p("odom_hz", 20.0))))
         self.scan_every = max(1, round(self.rate / float(p("scan_hz", 10.0))))
