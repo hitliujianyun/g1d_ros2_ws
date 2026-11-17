@@ -16,7 +16,8 @@ $SUDO apt-get install -y --no-install-recommends \
   ros-jazzy-rosidl-generator-dds-idl \
   ros-jazzy-xacro ros-jazzy-robot-state-publisher \
   ros-jazzy-tf2-ros-py ros-jazzy-tf2-ros ros-jazzy-sensor-msgs-py ros-jazzy-std-srvs \
-  ros-jazzy-launch-testing ros-jazzy-launch-testing-ros ros-jazzy-launch-testing-ament-cmake
+  ros-jazzy-launch-testing ros-jazzy-launch-testing-ros ros-jazzy-launch-testing-ament-cmake \
+  ros-jazzy-ament-cmake-gtest
 
 # Livox-SDK2 (system install, linked by livox_ros_driver2)
 if [ ! -f /usr/local/lib/liblivox_lidar_sdk_shared.so ]; then
@@ -29,5 +30,7 @@ fi
 rosdep update --rosdistro jazzy
 # shellcheck disable=SC1091
 source /opt/ros/jazzy/setup.bash
+# Vendor / external packages are built with BUILD_TESTING=OFF (colcon.meta): skip their linters.
 rosdep install --from-paths src --ignore-src -y --rosdistro jazzy \
-  --skip-keys "ament_lint_auto ament_lint_common"
+  --skip-keys "ament_lint_auto ament_lint_common ament_cmake_clang_format ament_cmake_clang_tidy \
+ament_cmake_black ament_cmake_xmllint ament_cmake_copyright"

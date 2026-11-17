@@ -1,0 +1,13 @@
+{
+  "names": {
+    "livox_ros_driver2": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "fast_lio": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "pgo": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "interface": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "small_gicp": {"cmake-args": ["-DBUILD_TESTING=OFF", "-DBUILD_HELPER=ON"]},
+    "small_gicp_relocalization": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "unitree_api": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "unitree_go": {"cmake-args": ["-DBUILD_TESTING=OFF"]},
+    "unitree_hg": {"cmake-args": ["-DBUILD_TESTING=OFF"]}
+  }
+}
