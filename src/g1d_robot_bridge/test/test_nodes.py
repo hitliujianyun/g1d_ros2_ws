@@ -12,6 +12,7 @@ from g1d_msgs.msg import BodyLock  # noqa: E402
 from nav_msgs.msg import Odometry  # noqa: E402
 from rclpy.executors import SingleThreadedExecutor  # noqa: E402
 from rclpy.parameter import Parameter  # noqa: E402
+from rclpy.qos import qos_profile_sensor_data  # noqa: E402
 from sensor_msgs.msg import JointState, LaserScan  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 from unitree_hg.msg import LowState, MotorState  # noqa: E402
@@ -49,8 +50,10 @@ def test_restamp_odom_and_scan(ros):
     node = ChassisRestamp(parameter_overrides=[Parameter("log_offset_every", value=0.0)])
     ex.add_node(node)
     got = {}
-    h.create_subscription(Odometry, "/chassis/odom", lambda m: got.setdefault("odom", m), 10)
-    h.create_subscription(LaserScan, "/chassis/scan", lambda m: got.setdefault("scan", m), 10)
+    h.create_subscription(Odometry, "/chassis/odom", lambda m: got.setdefault("odom", m),
+                          qos_profile_sensor_data)
+    h.create_subscription(LaserScan, "/chassis/scan", lambda m: got.setdefault("scan", m),
+                          qos_profile_sensor_data)
     pub_o = h.create_publisher(Odometry, "/slamware_ros_sdk_server_node/odom", 10)
     pub_s = h.create_publisher(LaserScan, "/slamware_ros_sdk_server_node/scan", 10)
 
