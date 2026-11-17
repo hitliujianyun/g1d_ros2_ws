@@ -9,6 +9,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GuardState.msg"
   "msg/BodyLock.msg"
   "msg/LioHealth.msg"
+  "srv/SaveMap.srv"
   DEPENDENCIES std_msgs
 )
 

@@ -1,0 +1,15 @@
+# FASTLIO2_ROS2 pgo（vendor）配置：读取 FAST_LIO 的去畸变当帧点云（livox_imu 系）与位姿。
+cloud_topic: /g1d/obstacle_cloud     # = FAST_LIO /cloud_registered_body（lio.launch.py 中重映射）
+odom_topic: /Odometry
+map_frame: lio_map
+local_frame: lio_world
+publish_tf: false                    # g1d 补丁：地图坐标由 map_manager 在保存时换算
+
+key_pose_delta_deg: 10
+key_pose_delta_trans: 0.5
+loop_search_radius: 1.0              # m：与历史关键帧的距离小于此值才尝试闭环
+loop_time_tresh: 30.0                # s：只与 30 s 以前的关键帧闭环
+loop_score_tresh: 0.15               # ICP fitness 上限
+loop_submap_half_range: 5
+submap_resolution: 0.1
+min_loop_detect_duration: 5.0

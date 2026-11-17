@@ -9,16 +9,18 @@ No TF is published while LIO is missing or older than `max_extrapolation_s`: dow
 import math
 
 import rclpy
-from g1d_core.lio import BridgeState, HealthParams, LioHealth, make_tf
+from g1d_core.lio import BridgeState, HealthParams, LioHealth, make_tf, matrix_to_quat
 from g1d_msgs.msg import LioHealth as LioHealthMsg
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 BEST_EFFORT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                     durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
 def stamp_sec(s) -> float:
@@ -55,6 +57,7 @@ class LioBridge(Node):
         self.br = TransformBroadcaster(self)
         self.pub_odom = self.create_publisher(Odometry, "/odometry", 10)
         self.pub_health = self.create_publisher(LioHealthMsg, "/g1d/lio_health", 10)
+        self.pub_anchor = self.create_publisher(TransformStamped, "/g1d/lio_anchor", LATCHED)
         self.create_subscription(Odometry, d("lio_topic", "/Odometry").value, self.on_lio, 20)
         self.create_subscription(Odometry, d("wheel_topic", "/chassis/odom").value, self.on_wheel,
                                  BEST_EFFORT)
@@ -88,6 +91,20 @@ class LioBridge(Node):
         self.st.on_lio(stamp_sec(m.header.stamp), t_lio_imu, t_base_imu)
         if not anchored:
             self.get_logger().info("odom anchored at the first LIO pose")
+            self.publish_anchor(m.header.stamp, m.header.frame_id)
+
+    def publish_anchor(self, stamp, lio_frame: str) -> None:
+        """T_odom_lio (latched): converts FAST_LIO / pose-graph map coordinates to odom."""
+        a = self.st.anchor.t_odom_lio
+        t = TransformStamped()
+        t.header.stamp = stamp
+        t.header.frame_id = self.odom_frame
+        t.child_frame_id = lio_frame or "lio_world"
+        t.transform.translation.x, t.transform.translation.y, t.transform.translation.z = (float(v) for v in a[:3, 3])
+        q = matrix_to_quat(a[:3, :3])
+        r = t.transform.rotation
+        r.x, r.y, r.z, r.w = q
+        self.pub_anchor.publish(t)
 
     def tick(self) -> None:
         now = self.get_clock().now()

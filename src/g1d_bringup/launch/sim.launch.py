@@ -27,6 +27,8 @@ def generate_launch_description():
                               description="guard needs Mid-360 obstacle points (default: = lio)"),
         DeclareLaunchArgument("guard", default_value="true"),
         DeclareLaunchArgument("point_filter_num", default_value="2"),
+        DeclareLaunchArgument("mapping", default_value="false", description="pgo + map_manager (needs lio:=true)"),
+        DeclareLaunchArgument("maps_dir", default_value="~/g1d_maps"),
         Node(package="g1d_sim", executable="chassis_sim", name="chassis_sim", output="screen",
              parameters=[{"world": LaunchConfiguration("world"),
                           "http_port": ParameterValue(port, value_type=int)}]),
@@ -42,4 +44,10 @@ def generate_launch_description():
             condition=IfCondition(lio),
             launch_arguments={"lidar_source": "sim", "world": LaunchConfiguration("world"),
                               "point_filter_num": LaunchConfiguration("point_filter_num")}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(launch_dir, "mapping.launch.py")),
+            condition=IfCondition(LaunchConfiguration("mapping")),
+            launch_arguments={"maps_dir": LaunchConfiguration("maps_dir"),
+                              "pgo_config": os.path.join(
+                                  get_package_share_directory("g1d_bringup"), "config", "pgo_sim.yaml")}.items()),
     ])

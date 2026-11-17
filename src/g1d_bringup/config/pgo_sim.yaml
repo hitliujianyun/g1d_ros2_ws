@@ -1,0 +1,15 @@
+# 仿真（CI）用 pgo 配置：路线短，闭环时间门限降到 15 s。
+cloud_topic: /g1d/obstacle_cloud
+odom_topic: /Odometry
+map_frame: lio_map
+local_frame: lio_world
+publish_tf: false
+
+key_pose_delta_deg: 10
+key_pose_delta_trans: 0.5
+loop_search_radius: 1.0
+loop_time_tresh: 15.0
+loop_score_tresh: 0.15
+loop_submap_half_range: 5
+submap_resolution: 0.1
+min_loop_detect_duration: 5.0

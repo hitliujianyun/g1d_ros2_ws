@@ -1,0 +1,9 @@
+# Save the current map (g1d_mapping map_manager): maps_dir/<name>/{map.pcd, map.yaml, map.pgm,
+# trajectory.csv, keyframes/, meta.yaml}. Empty name -> timestamp.
+string name
+---
+bool success
+string message
+string path          # directory written
+int32 keyframes
+int32 points         # points in map.pcd

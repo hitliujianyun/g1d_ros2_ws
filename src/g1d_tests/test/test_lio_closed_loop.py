@@ -32,14 +32,38 @@ MAX_YAW_ERR = math.radians(2.0)
 CARRIED_BOX = ((0.32, 0.43), (-0.18, 0.18), (0.97, 1.13))   # sim body box shrunk by 2 cm
 
 
+REPORT_DIR = os.environ.get("G1D_TEST_REPORT_DIR", "/tmp/g1d_test_reports")
+MAPS_DIR = os.path.join(REPORT_DIR, "maps")
+
+
 @pytest.mark.launch_test
 def generate_test_description():
     sim = os.path.join(get_package_share_directory("g1d_bringup"), "launch", "sim.launch.py")
     return launch.LaunchDescription([
         IncludeLaunchDescription(PythonLaunchDescriptionSource(sim), launch_arguments={
-            "world": "room", "lio": "true", "http_port": "18092"}.items()),
+            "world": "room", "lio": "true", "mapping": "true", "maps_dir": MAPS_DIR,
+            "http_port": "18092"}.items()),
         launch_testing.actions.ReadyToTest(),
     ])
+
+
+def surface_distance(points, boxes):
+    """Distance of each point to the nearest floor / box surface."""
+    d = np.abs(points[:, 2])
+    for b in boxes:
+        lo, hi = np.array(b[:3]), np.array(b[3:])
+        outside = np.maximum(np.maximum(lo - points, points - hi), 0.0)
+        dist_out = np.linalg.norm(outside, axis=1)
+        inside = np.all((points >= lo) & (points <= hi), axis=1)
+        dist_in = np.min(np.minimum(points - lo, hi - points), axis=1)
+        d = np.minimum(d, np.where(inside, dist_in, dist_out))
+    return d
+
+
+def write_report(name, report):
+    os.makedirs(REPORT_DIR, exist_ok=True)
+    with open(os.path.join(REPORT_DIR, name), "w", encoding="utf-8") as f:
+        json.dump(report, f)
 
 
 def planar(m: Odometry):
@@ -112,7 +136,7 @@ class TestLioClosedLoop(unittest.TestCase):
         g = self.guard[-1] if self.guard else None
         self.assertTrue(ok, f"leg did not finish (guard blocked={g.blocked if g else '?'})")
 
-    def test_square_loop_accuracy_and_self_filter(self):
+    def test_1_square_loop_accuracy_and_self_filter(self):
         ok = self.spin(90.0, until=lambda: self.health and self.health[-1].ok and self.odom and self.gt)
         self.assertTrue(ok, f"LIO not healthy: {list(self.health[-1].errors) if self.health else 'no health'}")
         self.spin(3.0)                                    # settle after IMU initialisation
@@ -131,13 +155,42 @@ class TestLioClosedLoop(unittest.TestCase):
                   "duration_s": round(time.monotonic() - t0, 1), "self_hits": self.self_hits,
                   "clouds": self.clouds, "lio_ok_at_end": bool(self.health[-1].ok)}
         print(f"LIO square loop: {report}")
-        out_dir = os.environ.get("G1D_TEST_REPORT_DIR")
-        if out_dir:
-            os.makedirs(out_dir, exist_ok=True)
-            with open(os.path.join(out_dir, "lio_square_loop.json"), "w", encoding="utf-8") as f:
-                json.dump(report, f)
+        write_report("lio_square_loop.json", report)
         self.assertGreater(self.clouds, 50)
         self.assertEqual(self.self_hits, 0)
         self.assertLess(pos_err, MAX_POS_ERR)
         self.assertLess(yaw_err, MAX_YAW_ERR)
         self.assertTrue(self.health[-1].ok, list(self.health[-1].errors))
+
+    def test_2_save_map_and_quality(self):
+        from g1d_core.grid import load_map, occupancy_scores, rasterize_boxes
+        from g1d_core.pcd import read_pcd, xyz
+        from g1d_core.sim2d import load_world
+        from g1d_msgs.srv import SaveMap
+        cli = self.node.create_client(SaveMap, "/g1d/save_map")
+        self.assertTrue(cli.wait_for_service(timeout_sec=10.0), "no /g1d/save_map")
+        fut = cli.call_async(SaveMap.Request(name="ci_room"))
+        self.spin(150.0, until=fut.done)
+        self.assertTrue(fut.done(), "save_map timed out")
+        r = fut.result()
+        self.assertTrue(r.success, r.message)
+        out = r.path
+        for f in ("map.pcd", "map.yaml", "map.pgm", "trajectory.csv", "meta.yaml", "keyframes/poses.csv"):
+            self.assertTrue(os.path.isfile(os.path.join(out, f)), f)
+        # The map frame is the odom frame of the session; the robot started at the world origin,
+        # so map and world coincide up to the LIO start-up error.
+        boxes = load_world(os.path.join(get_package_share_directory("g1d_sim"), "worlds", "room.yaml"))
+        pts = xyz(read_pcd(os.path.join(out, "map.pcd")))
+        d = surface_distance(pts, boxes)
+        grid = load_map(os.path.join(out, "map.yaml"))
+        precision, recall = occupancy_scores(grid, rasterize_boxes(boxes, grid), tol_cells=2)
+        report = {"points": int(len(pts)), "keyframes": int(r.keyframes),
+                  "surface_err_median_m": round(float(np.median(d)), 4),
+                  "surface_err_p90_m": round(float(np.percentile(d, 90)), 4),
+                  "grid_precision": round(precision, 3), "grid_recall_observed_outline": round(recall, 3)}
+        print(f"map quality: {report}")
+        write_report("map_quality.json", report)
+        self.assertGreater(r.keyframes, 10)
+        self.assertLess(np.median(d), 0.05)
+        self.assertLess(np.percentile(d, 90), 0.15)
+        self.assertGreater(precision, 0.8)
