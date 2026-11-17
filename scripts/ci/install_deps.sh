@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs the build / test dependencies of the workspace inside a ros:jazzy container (CI) or on
 # the 5090 host. Usage: scripts/ci/install_deps.sh   (run from the workspace root, as root or with sudo)
-set -euo pipefail
+# no `set -u`: /opt/ros/*/setup.bash reads unset variables
+set -eo pipefail
 
 SUDO=""
 if [ "$(id -u)" != "0" ]; then SUDO="sudo"; fi
