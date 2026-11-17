@@ -45,9 +45,15 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   DIRECTORY src
 )
 
+# g1d: an installed small_gicp exports the namespaced target (FetchContent provides `small_gicp`)
+if(TARGET small_gicp::small_gicp)
+  set(SMALL_GICP_TARGET small_gicp::small_gicp)
+else()
+  set(SMALL_GICP_TARGET small_gicp)
+endif()
 target_link_libraries(${PROJECT_NAME}
   OpenMP::OpenMP_CXX
-  small_gicp
+  ${SMALL_GICP_TARGET}
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}
