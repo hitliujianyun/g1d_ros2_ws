@@ -28,6 +28,7 @@
 #include "small_gicp/pcl/pcl_point.hpp"
 #include "small_gicp/registration/reduction_omp.hpp"
 #include "small_gicp/registration/registration.hpp"
+#include "std_msgs/msg/float64_multi_array.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_broadcaster.h"
 #include "tf2_ros/transform_listener.h"
@@ -49,6 +50,8 @@ private:
 
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcd_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
+  // g1d: registration quality [converged, num_inliers, source_points, error, iterations]
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr status_pub_;
 
   int num_threads_;
   int num_neighbors_;

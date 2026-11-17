@@ -97,6 +97,8 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
     "initialpose", 10,
     std::bind(&SmallGicpRelocalizationNode::initialPoseCallback, this, std::placeholders::_1));
 
+  status_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("~/status", 10);
+
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
     std::bind(&SmallGicpRelocalizationNode::performRegistration, this));
@@ -176,6 +178,12 @@ void SmallGicpRelocalizationNode::performRegistration()
   } else {
     RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
   }
+
+  std_msgs::msg::Float64MultiArray status;
+  status.data = {
+    result.converged ? 1.0 : 0.0, static_cast<double>(result.num_inliers),
+    static_cast<double>(source_->size()), result.error, static_cast<double>(result.iterations)};
+  status_pub_->publish(status);
 
   accumulated_cloud_->clear();
 }
