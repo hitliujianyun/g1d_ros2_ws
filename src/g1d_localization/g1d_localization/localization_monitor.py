@@ -257,8 +257,13 @@ class LocalizationMonitor(Node):
             m.inlier_ratio, m.error = float(self.last_status[1]), float(self.last_status[2])
         m.last_ok_age = -1.0 if self.last_ok is None else float(time.monotonic() - self.last_ok)
         m.correction = float(self.correction)
-        mb = self.lookup(self.map_frame, self.base_frame)
-        if mb is not None:
+        try:
+            t = self.tf.lookup_transform(self.map_frame, self.base_frame, Time())
+        except TransformException:
+            t = None
+        if t is not None:
+            mb = tf_matrix(t)
+            m.header.stamp = t.header.stamp
             m.pose.x, m.pose.y, m.pose.theta = float(mb[0, 3]), float(mb[1, 3]), float(yaw_of(mb))
         self.pub_status.publish(m)
 

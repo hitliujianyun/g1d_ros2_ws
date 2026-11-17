@@ -21,7 +21,7 @@ def rewrite(params: dict, global_frame: str, profile: str = "robot") -> dict:
     if profile == "sim":                            # CI runners: 4 vCPUs shared with the LIO simulation
         cs = params["controller_server"]["ros__parameters"]
         cs["controller_frequency"] = 10.0
-        cs["FollowPath"].update({"batch_size": 400, "time_steps": 40, "model_dt": 0.07})
+        cs["FollowPath"].update({"batch_size": 400, "time_steps": 30, "model_dt": 0.1})
         params["local_costmap"]["local_costmap"]["ros__parameters"]["update_frequency"] = 5.0
     params["bt_navigator"]["ros__parameters"]["global_frame"] = global_frame
     params["behavior_server"]["ros__parameters"]["global_frame"] = global_frame
