@@ -19,7 +19,9 @@
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>interface</depend>
-  <depend>GTSAM</depend>
+  <depend>gtsam</depend>
+  <depend>yaml-cpp</depend>
+  <depend>libpcl-all-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
