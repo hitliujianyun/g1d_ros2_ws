@@ -4,3 +4,6 @@
 [submodule "third_party/Livox-SDK2"]
 	path = third_party/Livox-SDK2
 	url = https://github.com/Livox-SDK/Livox-SDK2.git
+[submodule "src/external/small_gicp"]
+	path = src/external/small_gicp
+	url = https://github.com/koide3/small_gicp.git
