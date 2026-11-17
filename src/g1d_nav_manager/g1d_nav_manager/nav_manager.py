@@ -67,7 +67,7 @@ class NavManager(Node):
         self.default_timeout = float(d("default_timeout_s", 120.0).value)
         self.goal_params = GoalParams(max_distance=float(d("max_goal_distance", 9.0).value),
                                       cost_threshold=int(d("goal_cost_threshold", 50).value),
-                                      search_radius=float(d("goal_search_radius", 0.5).value))
+                                      search_radius=float(d("goal_search_radius", 1.0).value))
         self.max_stamp_age = float(d("max_stamp_age_s", 5.0).value)
         self.require_body_lock = bool(d("require_body_lock", True).value)
         self.require_localization = bool(d("require_localization", self.global_frame == "map").value)
@@ -188,6 +188,7 @@ class NavManager(Node):
             timeout = g.timeout_s if g.timeout_s > 0 else self.default_timeout
             self.pub_speed.publish(SpeedLimit(percentage=False, speed_limit=float(max(0.0, g.max_speed))))
             if g.mode in ("", "navigate"):
+                res.goal.x, res.goal.y, res.goal.theta = gx, gy, gyaw
                 if self.global_grid is not None:
                     chk = sanitize_goal(self.global_grid, robot[:2], (gx, gy), self.goal_params)
                     res.partial, res.adjusted = chk.partial, chk.adjusted

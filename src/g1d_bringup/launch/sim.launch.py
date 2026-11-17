@@ -34,6 +34,7 @@ def generate_launch_description():
         DeclareLaunchArgument("maps_dir", default_value="~/g1d_maps"),
         DeclareLaunchArgument("nav", default_value="false",
                               description="odom-mode localization + Nav2 + nav_manager (needs lio:=true)"),
+        DeclareLaunchArgument("nav_profile", default_value="sim", description="robot | sim (lighter MPPI)"),
         Node(package="g1d_sim", executable="chassis_sim", name="chassis_sim", output="screen",
              parameters=[{"world": LaunchConfiguration("world"),
                           "http_port": ParameterValue(port, value_type=int),
@@ -63,5 +64,6 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration("nav")), launch_arguments={"mode": "odom"}.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(launch_dir, "navigation.launch.py")),
-            condition=IfCondition(LaunchConfiguration("nav")), launch_arguments={"global_frame": "odom"}.items()),
+            condition=IfCondition(LaunchConfiguration("nav")),
+            launch_arguments={"global_frame": "odom", "profile": LaunchConfiguration("nav_profile")}.items()),
     ])

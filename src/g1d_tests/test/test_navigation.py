@@ -13,7 +13,9 @@ import launch_testing.actions
 import pytest
 import rclpy
 from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import Twist
 from g1d_core.lio import wrap
+from g1d_msgs.msg import GuardState
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from nav_msgs.msg import Odometry
@@ -49,8 +51,17 @@ class TestNavigation(unittest.TestCase):
         n.create_subscription(Bool, "/sim/collided", lambda m: cls.collided.__setitem__(0, m.data), 10)
         n.create_subscription(Float32, "/sim/min_gap",
                               lambda m: cls.gap.__setitem__(0, min(cls.gap[0], m.data)), 10)
+        cls.blocked, cls.n_cmd = {}, [0]
+        n.create_subscription(GuardState, "/g1d/guard_state", cls.on_guard, 10)
+        n.create_subscription(Twist, "/nav/cmd_vel", lambda m: cls.n_cmd.__setitem__(0, cls.n_cmd[0] + 1), 50)
         cls.nav = NavClient(n)
         cls.report = {}
+
+    @classmethod
+    def on_guard(cls, m):
+        key = m.blocked or ("estop" if m.estop else "manual" if m.manual else "")
+        if key:
+            cls.blocked[key] = cls.blocked.get(key, 0) + 1
 
     @classmethod
     def tearDownClass(cls):
@@ -70,12 +81,16 @@ class TestNavigation(unittest.TestCase):
 
     def run_goal(self, name, **kw):
         t0 = time.monotonic()
+        self.blocked.clear()
+        n0 = self.n_cmd[0]
         gid = self.nav.send(**kw)
         r = self.nav.wait(gid, timeout=150.0)
         p = self.gt_pose()
+        dt = time.monotonic() - t0
         self.report[name] = {"result": r, "gt_final": [round(v, 3) for v in p],
-                             "time_s": round(time.monotonic() - t0, 1), "min_gap_m": round(self.gap[0], 3),
-                             "collided": self.collided[0]}
+                             "time_s": round(dt, 1), "min_gap_m": round(self.gap[0], 3),
+                             "collided": self.collided[0], "guard_blocked_10hz": dict(self.blocked),
+                             "nav_cmd_hz": round((self.n_cmd[0] - n0) / max(dt, 1e-3), 1)}
         print(f"{name}: {self.report[name]}")
         return r, p
 

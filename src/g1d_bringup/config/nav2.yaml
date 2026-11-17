@@ -287,7 +287,7 @@ nav_manager:
     default_timeout_s: 120.0
     max_goal_distance: 9.0
     goal_cost_threshold: 50          # OccupancyGrid 0..100（约 Nav2 128/254）
-    goal_search_radius: 0.5
+    goal_search_radius: 1.0          # 目标在障碍 / 膨胀区内时的外移搜索半径（m）
     max_stamp_age_s: 5.0
     require_body_lock: true
     free_sector_range: 1.5

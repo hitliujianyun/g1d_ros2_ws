@@ -17,7 +17,12 @@ from launch_ros.actions import Node
 NAV2_NODES = ["controller_server", "planner_server", "behavior_server", "bt_navigator", "waypoint_follower"]
 
 
-def rewrite(params: dict, global_frame: str) -> dict:
+def rewrite(params: dict, global_frame: str, profile: str = "robot") -> dict:
+    if profile == "sim":                            # CI runners: 4 vCPUs shared with the LIO simulation
+        cs = params["controller_server"]["ros__parameters"]
+        cs["controller_frequency"] = 10.0
+        cs["FollowPath"].update({"batch_size": 400, "time_steps": 40, "model_dt": 0.07})
+        params["local_costmap"]["local_costmap"]["ros__parameters"]["update_frequency"] = 5.0
     params["bt_navigator"]["ros__parameters"]["global_frame"] = global_frame
     params["behavior_server"]["ros__parameters"]["global_frame"] = global_frame
     gc = params["global_costmap"]["global_costmap"]["ros__parameters"]
@@ -34,7 +39,7 @@ def _nodes(context):
     arg = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     gf = arg("global_frame")
     with open(arg("params") or os.path.join(share, "config", "nav2.yaml"), encoding="utf-8") as f:
-        params = rewrite(yaml.safe_load(f), gf)
+        params = rewrite(yaml.safe_load(f), gf, arg("profile"))
     fd, path = tempfile.mkstemp(prefix="g1d_nav2_", suffix=".yaml")
     with os.fdopen(fd, "w") as f:
         yaml.safe_dump(params, f, sort_keys=False)
@@ -62,5 +67,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("global_frame", default_value="map", description="map | odom"),
         DeclareLaunchArgument("params", default_value="", description="Nav2 params (default config/nav2.yaml)"),
+        DeclareLaunchArgument("profile", default_value="robot",
+                              description="robot | sim (lighter MPPI for small CI machines)"),
         OpaqueFunction(function=_nodes),
     ])
