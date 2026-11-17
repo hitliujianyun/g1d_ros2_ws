@@ -2,13 +2,13 @@
 g1d_guard:
   ros__parameters:
     rate_hz: 30.0
-    vx_max: 0.50
+    vx_max: 0.40            # = MPPI vx_max；停车时间 0.25 + 0.40 / 1.5 = 0.52 s < 0.6 s
     vx_min: -0.10
     wz_max: 0.60
     acc_v: 0.5
-    brake_v: 2.0            # 0.5 m/s -> 0 用 0.25 s（与 cmd_timeout 合计 0.5 s，满足 0.6 s 停车要求）
+    brake_v: 1.5            # 重心约 1 m、底盘半长约 0.28 m：前倾临界约 2.7 m/s²，减速度不要再加大
     acc_w: 1.0
-    cmd_timeout: 0.25       # 导航指令超时
+    cmd_timeout: 0.25       # 导航指令超时（Nav2 控制器 20 Hz，可容忍 4 个周期抖动）
     sensor_timeout: 0.5
     zero_hold: 1.0          # 归零后继续发布零速的时间，之后停止发布让底盘松开【待实测】
     front_x: 0.28

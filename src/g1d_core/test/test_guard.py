@@ -42,19 +42,20 @@ def test_params_from_dict():
     assert GuardParams.from_dict(None).require_cloud is True
 
 
-def test_deploy_params_zero_command_within_half_second():
-    """Deployment overrides (cmd_timeout 0.25, brake_v 2.0): at 0.5 m/s the output reaches 0
-    within 0.5 s after the last nav command, leaving margin for the 0.6 s stop requirement."""
-    p = GuardParams(cmd_timeout=0.25, brake_v=2.0)
+def test_deploy_params_zero_command_within_0p6s():
+    """Deployment config (vx_max 0.40, cmd_timeout 0.25, brake_v 1.5): from full speed the output
+    reaches 0 within 0.25 + 0.40 / 1.5 = 0.52 s after the last nav command (< 0.6 s)."""
+    p = GuardParams(vx_max=0.40, cmd_timeout=0.25, brake_v=1.5)
     g = fed(p)
     run(g, 0.0, 2.0, cmd=(0.5, 0.0))
     t_last = 2.0 - DT
     outs = run(g, 2.0, 3.0)
     t = 2.0 + DT * np.arange(len(outs))
     v = np.array([o.v for o in outs])
-    assert v[0] == pytest.approx(0.5)
+    assert v[0] == pytest.approx(0.40)
     t_zero = t[np.argmax(v == 0.0)]
-    assert t_zero - t_last <= 0.5 + 2 * DT
+    assert t_zero - t_last <= 0.25 + 0.40 / 1.5 + 2 * DT
+    assert t_zero - t_last < 0.6
 
 
 def test_straight_clearance_is_exact():

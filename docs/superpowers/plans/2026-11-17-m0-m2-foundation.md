@@ -16,7 +16,7 @@
 - 订阅宇树 / SLAMWARE 话题用 best-effort QoS；发布 `/cmd_vel_no_limit` 用 reliable、volatile。
 - `g1d_core` 不得 import 任何 ROS 包。
 - 文本文件 LF；上游：未修改用 submodule（`src/external/`），修改的先原样提交再打补丁（`UPSTREAM.md`）。
-- 守护参数沿用 `g1d_ws`；部署配置覆盖 `cmd_timeout: 0.25`、`brake_v: 2.0`（保证 0.5 m/s 下 0.25 + 0.25 = 0.5 s 指令归零）。
+- 守护参数沿用 `g1d_ws`；部署配置覆盖 `cmd_timeout: 0.25`、`vx_max: 0.40`，`brake_v` 保持 1.5（防前倾），停车 0.25 + 0.40 / 1.5 ≈ 0.52 s。
 
 ---
 
