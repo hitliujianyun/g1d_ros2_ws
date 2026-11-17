@@ -13,15 +13,17 @@ import logging
 import math
 import os
 import struct
+import threading
 import time
 import uuid
 from typing import Any, Deque, Dict, List, Optional
 
 import numpy as np
 
-from g1d_nav_py.config import get
+from g1d_core import acceptance
 
-from . import acceptance, mapping, mission, params
+from . import mapping, mission, params
+from .config import get
 from .hub import Hub, base_to_odom
 from .wsproto import OP_TEXT, WebSocket, WebSocketClosed
 
@@ -45,10 +47,10 @@ def clean_goal(g: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("goal must be an object")
     out = {k: v for k, v in g.items() if k in GOAL_KEYS and v is not None and v != ""}
     out.setdefault("mode", "navigate")
-    out.setdefault("frame", "odom")
+    out.setdefault("frame", "map")              # display frame (map -> odom is identity without a map)
     if out["mode"] not in ("navigate", "rotate", "simple", "stop"):
         raise ValueError("bad mode")
-    if out["frame"] not in ("odom", "base_at_stamp"):
+    if out["frame"] not in ("map", "odom", "base_at_stamp", "base"):
         raise ValueError("bad frame")
     for k in ("x", "y", "yaw", "xy_tolerance", "yaw_tolerance", "max_speed", "timeout_s", "stamp"):
         if k in out:
@@ -169,7 +171,7 @@ class WebApp:
         self.latest_scan = (pts_view, valid)
         self.scan_version += 1
         if not valid:
-            self.map_paused_reason = "等待 g1d_nav 的 T_odom_lio（rt/nav/debug）"
+            self.map_paused_reason = "等待 TF（显示坐标系 <- odom）"
             return
         self.map_paused_reason = "" if self.map_enabled else "已暂停"
         if self.map_enabled:
@@ -369,13 +371,44 @@ class WebApp:
             return {"type": "param_saved", **res}
         if t == "test":
             return self.handle_test(msg, now)
+        if t == "init_pose":
+            self._require_control(c)
+            self.hub.send_initial_pose(float(msg["x"]), float(msg["y"]), float(msg.get("yaw", 0.0)))
+            self.log_event("info", f"初始位姿 x={float(msg['x']):.2f} y={float(msg['y']):.2f} "
+                                   f"yaw={math.degrees(float(msg.get('yaw', 0.0))):.0f}°")
+            return None
+        if t in ("relocalize", "save_map"):
+            self._require_control(c)
+            threading.Thread(target=self._service_call, args=(t, msg), daemon=True).start()
+            return None
         raise ValueError(f"unknown message type {t!r}")
+
+    def _service_call(self, kind: str, msg: Dict[str, Any]) -> None:
+        """Slow service calls (global search, map export) off the event loop; result as an event."""
+        from g1d_msgs.srv import Relocalize, SaveMap
+        try:
+            if kind == "relocalize":
+                r = self.hub.call_service("/g1d/relocalize", Relocalize, Relocalize.Request(mode=str(msg["mode"])))
+                text = (f"重定位（{msg['mode']}）：{r.message}" + (f"，score {r.score:.2f}" if r.success and
+                                                                msg["mode"] == "auto" else ""))
+            else:
+                r = self.hub.call_service("/g1d/save_map", SaveMap, SaveMap.Request(name=str(msg.get("name", ""))),
+                                          timeout=180.0)
+                text = f"保存地图：{r.message}"
+            self.log_event("info" if r.success else "warn", text)
+        except Exception as e:  # noqa: BLE001 - reported to the browser
+            self.log_event("warn", f"{kind} 失败：{e}")
 
     # ---- acceptance tests -------------------------------------------------------------------
     def obs(self) -> Dict[str, Any]:
         p, _ = self.hub.pose()
+        o = self.hub.pose_odom
+        fresh_odom = o is not None and self.now() - o["t"] < 1.0
+        loc = self.hub.json.get("loc") or {}
         v, w = self.hub.velocity()
-        return {"pose": (p["x"], p["y"], p["yaw"]) if p else None, "v": v, "w": w,
+        return {"pose": (o["x"], o["y"], o["yaw"]) if fresh_odom else None,   # odom: LIO drift (T3 / T4)
+                "map_pose": (p["x"], p["y"], p["yaw"]) if p and loc.get("localized") else None,
+                "v": v, "w": w,
                 "guard": self.hub.json.get("guard") or {}, "status": self.hub.json.get("status") or {}}
 
     def handle_test(self, msg: Dict[str, Any], now: float) -> Optional[Dict[str, Any]]:
@@ -530,7 +563,7 @@ class WebApp:
         base = {
             "type": "state", "t": time.time(),
             "status": hub.json.get("status"), "guard": hub.json.get("guard"),
-            "lio": hub.json.get("lio"), "debug": hub.json.get("debug"),
+            "lio": hub.json.get("lio"), "debug": hub.json.get("debug"), "loc": hub.json.get("loc"),
             "pose": dict(p, source=source) if p else None,
             "fresh": {k: hub.fresh(k, 1.0) for k in ("status", "guard", "lio", "debug", "cloud",
                                                       "chassis", "wheel_odom", "base_odom")},

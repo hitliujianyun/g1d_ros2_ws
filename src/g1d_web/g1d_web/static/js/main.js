@@ -83,6 +83,9 @@ function onHello(m) {
 function onState(s) {
   ui.state = s;
   const st = s.status || {}, g = s.guard || {}, lio = s.lio || {}, fresh = s.fresh || {};
+  const loc = s.loc || {};
+  pill($('locState'), loc.mode ? `定位 ${loc.mode} ${loc.localized ? '正常' : '未收敛 ' + (loc.reasons || []).join(',')}` : '定位 -',
+    loc.localized ? 'ok' : (loc.mode ? 'warn' : ''));
   ui.you = !!(s.control && s.control.you); ui.owner = s.control && s.control.owner;
 
   // top bar
@@ -166,6 +169,13 @@ function goalFromForm() {
   return g;
 }
 $('btnSendGoal').onclick = () => send({ type: 'goal', goal: goalFromForm() });
+$('btnPickInit').onclick = () => startPick('init', (x, y, yaw) => {
+  stopPick();
+  send({ type: 'init_pose', x, y, yaw });
+});
+$('btnRelocAuto').onclick = () => send({ type: 'relocalize', mode: 'auto' });
+$('btnRelocLast').onclick = () => send({ type: 'relocalize', mode: 'last' });
+$('btnSaveMap').onclick = () => send({ type: 'save_map', name: $('saveMapName').value.trim() });
 $('btnPickGoal').onclick = () => startPick('goal', (x, y, yaw) => {
   $('gFrame').value = 'odom'; $('gX').value = x.toFixed(2); $('gY').value = y.toFixed(2);
   if (yaw !== null) { $('gYaw').value = (yaw / DEG).toFixed(0); $('gUseYaw').checked = true; }

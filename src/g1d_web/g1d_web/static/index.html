@@ -83,6 +83,12 @@
         <label>位置容差 (m) <input id="gTol" type="number" step="0.05" value="0.2"></label>
       </div>
       <div class="row">
+        <button id="btnPickInit">点选初始位姿</button>
+        <button id="btnRelocAuto">自动重定位</button>
+        <button id="btnRelocLast">上次位姿</button>
+        <span id="locState" class="pill">定位 -</span>
+      </div>
+      <div class="row">
         <button id="btnPickGoal">地图点选</button>
         <label class="check"><input id="gAutoSend" type="checkbox" checked> 点选后立即发送</label>
         <button id="btnSendGoal" class="primary">发送目标</button>
@@ -158,6 +164,10 @@
       <div class="row">
         <label>着色 <select id="mapColor"><option value="height">按高度</option><option value="mono">单色</option></select></label>
         <button id="btnMapExport" class="primary">导出地图</button>
+      </div>
+      <div class="row">
+        <label>建图保存名 <input id="saveMapName" type="text" placeholder="office" size="12"></label>
+        <button id="btnSaveMap" class="primary">保存定位地图（pgo）</button>
       </div>
       <h3>已导出</h3>
       <div id="exports"></div>

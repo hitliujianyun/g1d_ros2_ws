@@ -8,7 +8,7 @@ import zlib
 import numpy as np
 import pytest
 
-from g1d_web import acceptance, mapping, mission, params
+from g1d_web import mapping, mission, params
 from g1d_web.app import clean_goal, pack
 from g1d_web.wsproto import (OP_BINARY, OP_TEXT, WebSocket, WebSocketClosed, accept_key,
                              encode_frame)
@@ -155,16 +155,27 @@ def test_yaml_update_keeps_comments_and_inserts():
     assert text.count("approach_v_max: 0.2            # final approach speed") == 1
 
 
-def test_save_params_writes_backup(tmp_path):
-    p = tmp_path / "cfg.yaml"
-    p.write_text(YAML, encoding="utf-8")
-    res = params.save_params(str(p), "nav", {"approach_v_max": 0.15, "mppi_vx_max": 0.4, "max_speed": 0.3})
-    assert "mppi_vx_max" not in res["changed"]
-    assert os.path.isfile(res["backup"])
+GUARD_YAML = """# guard parameters
+g1d_guard:
+  ros__parameters:
+    rate_hz: 30.0
+    stop_m: 0.45            # stop distance
+    slow_m: 1.20
+"""
+
+
+def test_save_params_writes_backup_ros_layout(tmp_path):
+    p = tmp_path / "guard.yaml"
+    p.write_text(GUARD_YAML, encoding="utf-8")
+    res = params.save_params(str(p), "guard", {"stop_m": 0.5, "creep_v": 0.04})
+    assert set(res["changed"]) == {"stop_m", "creep_v"} and os.path.isfile(res["backup"])
     t = p.read_text(encoding="utf-8")
-    assert "approach_v_max: 0.15" in t and "  max_speed: 0.3 " in t
+    assert "    stop_m: 0.5             # stop distance\n" in t
     import yaml
-    assert yaml.safe_load(t)["manager"]["approach_v_max"] == 0.15
+    d = yaml.safe_load(t)["g1d_guard"]["ros__parameters"]
+    assert d["stop_m"] == 0.5 and d["creep_v"] == 0.04 and d["rate_hz"] == 30.0
+    with pytest.raises(ValueError):
+        params.save_params(str(p), "nav", {"x": 1})
 
 
 def test_format_value():
@@ -258,104 +269,28 @@ def test_mission_pause_cancel_and_no_ack(tmp_path):
     assert mission.list_missions(str(tmp_path)) == []
 
 
-# --------------------------------------------------------------------------------- acceptance
-def test_t1_stop_distance_trial():
-    t = acceptance.T1StopDistance({"speed": 0.3})
-    acts = t.start(0.0, {"pose": (0, 0, 0)})
-    assert acts == [("teleop", 0.3, 0.0)]
-    now = 0.0
-    for _ in range(20):
-        now += 0.05
-        assert t.tick(now, {"pose": (now * 0.3, 0, 0), "v": 0.3, "guard": {"blocked": ""}})[0][1] == 0.3
-    out = []
-    for _ in range(20):
-        now += 0.05
-        out = t.tick(now, {"pose": (1.5, 0, 0), "v": 0.0, "guard": {"blocked": "front", "front_clear": 0.43}})
-        if t.state == "ready":
-            break
-    assert out == [("teleop", 0.0, 0.0)]
-    assert t.trials[-1]["ok"] and t.trials[-1]["front_clear_m"] == 0.43
-    assert t.passed() is None                     # fewer than 10 trials
-
-
-def test_t2_stop_time():
-    t = acceptance.T2StreamLoss({"drive_s": 1.0})
-    t.start(0.0, {})
-    now = 0.0
-    while now < 1.0:
-        now += 0.05
-        t.tick(now, {"v": 0.3})
-    t.tick(now + 0.05, {"v": 0.3})
-    t.tick(now + 0.3, {"v": 0.1})
-    t.tick(now + 0.45, {"v": 0.0})
-    assert t.trials[-1]["ok"] and t.trials[-1]["stop_time_s"] == pytest.approx(0.45, abs=0.06)
-
-
-def test_t3_and_t4():
-    t3 = acceptance.T3LoopClosure()
-    t3.start(0.0, {"pose": (0.0, 0.0, 0.0)})
-    t3.tick(1.0, {"pose": (5.0, 0.0, 0.0)})
-    t3.mark(2.0, {"pose": (0.05, -0.03, math.radians(1.0))})
-    assert t3.trials[0]["ok"] and t3.trials[0]["path_m"] == 5.0
-    t4 = acceptance.T4RotationDrift({"turns": 2})
-    acts = t4.start(0.0, {"pose": (1.0, 1.0, 0.0)})
-    assert acts[0][0] == "goal" and acts[0][1]["mode"] == "rotate"
-    gid = acts[0][1]["id"]
-    acts = t4.tick(1.0, {"pose": (1.0, 1.0, 1.0), "status": {"goal_id": gid, "state": "SUCCEEDED"}})
-    gid2 = acts[0][1]["id"]
-    t4.tick(2.0, {"pose": (1.01, 1.0, 3.1), "status": {"goal_id": gid2, "state": "SUCCEEDED"}})
-    assert t4.state == "done" and t4.trials[0]["ok"] and t4.trials[0]["drift_m"] == pytest.approx(0.01)
-
-
-def test_t5_t6_trial_recording():
-    t5 = acceptance.T5Corridor()
-    t5.start(0.0, {})
-    for i in range(10):
-        gid = f"g{i}"
-        t5.tick(i + 0.1, {"status": {"goal_id": gid, "state": "NAVIGATING"}, "guard": {"front_clear": 0.8}})
-        end = "SUCCEEDED" if i else "FAILED"
-        t5.tick(i + 0.5, {"status": {"goal_id": gid, "state": end, "reason": "blocked"}, "guard": {}})
-    assert len(t5.trials) == 10 and t5.passed() is True
-    t6 = acceptance.T6Overhang()
-    t6.start(0.0, {})
-    t6.tick(0.1, {"status": {"goal_id": "a", "state": "NAVIGATING"}, "guard": {}})
-    t6.tick(0.2, {"status": {"goal_id": "a", "state": "FAILED", "reason": "no_path"}, "guard": {}})
-    t6.tick(0.3, {"status": {"goal_id": "b", "state": "NAVIGATING"}, "guard": {"estop": True}})
-    t6.tick(0.4, {"status": {"goal_id": "b", "state": "FAILED", "reason": "guard_estop"}, "guard": {}})
-    assert [x["ok"] for x in t6.trials] == [True, False]
-
-
 # -------------------------------------------------------------------------------------- goals
 def test_clean_goal():
     g = clean_goal({"x": "1.5", "y": 2, "yaw": None, "evil": 1})
-    assert g["frame"] == "odom" and g["x"] == 1.5 and "yaw" not in g and "evil" not in g
+    assert g["frame"] == "map" and g["x"] == 1.5 and "yaw" not in g and "evil" not in g
     assert g["id"].startswith("web-")
     with pytest.raises(ValueError):
         clean_goal({"mode": "rotate"})
     with pytest.raises(ValueError):
         clean_goal({"x": float("nan"), "y": 0})
     with pytest.raises(ValueError):
-        clean_goal({"x": 1, "y": 1, "frame": "map"})
+        clean_goal({"x": 1, "y": 1, "frame": "lidar"})
 
 
-# ----------------------------------------------------------------------------------- fake nav
-def test_fake_nav_planner_and_lidar():
-    from g1d_nav_py.fake_nav import FakeNav, StaticCostmap, make_world3d, raycast3d
-    boxes = make_world3d("lab")
-    cm = StaticCostmap(boxes)
-    path = cm.astar((0.0, 0.0), (4.0, 0.0))
-    assert path is not None and path[-1] == (4.0, 0.0)
-    assert all(cm.at(x, y) < 253 for x, y in path[1:-1])
-    assert max(abs(y) for _, y in path) > 0.3                # detours around the box at x = 2..2.6
-    assert cm.at(2.3, 0.0) == 254 and cm.at(5.0, 2.0) == 254  # box and table top are lethal
-    dirs = np.array([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-    r = raycast3d(np.array([0.0, 0.0, 0.5]), dirs, boxes, 20.0)          # box is 0.8 m tall
-    assert r.tolist() == pytest.approx([0.5, 2.0, 2.3])
-    r = raycast3d(np.array([0.0, 0.0, 1.0]), dirs[1:2], boxes, 20.0)     # over the box -> wall
-    assert r[0] == pytest.approx(10.0)
-    nav = FakeNav(boxes, rays_per_frame=2000)
-    nav.pose = (0.0, 0.0, 0.0)
-    pts, pts_lio = nav.lidar_frame()
-    back = pts_lio.astype(np.float64) @ nav.R_odom_lio.T + nav.t_odom_lio
-    np.testing.assert_allclose(back, pts, atol=1e-4)
-    assert (np.abs(pts[:, 2]) < 0.05).mean() > 0.3          # inverted Mid-360S sees mostly floor
+def test_resample_grid_rotation():
+    from g1d_web.hub import resample_grid
+    data = np.zeros((10, 20), np.uint8)
+    data[:, 15:] = 100                                       # occupied band at x in [1.5, 2.0)
+    g = {"width": 20, "height": 10, "resolution": 0.1, "origin": [0.0, 0.0], "data": data.tobytes()}
+    t = np.eye(4)
+    t[:2, :2] = [[0.0, -1.0], [1.0, 0.0]]                    # rotate +90 deg
+    out = resample_grid(g, t)
+    assert (out["width"], out["height"]) == (10, 20) and out["origin"] == pytest.approx([-1.0, 0.0])
+    img = np.frombuffer(out["data"], np.uint8).reshape(out["height"], out["width"])
+    assert img[17, 5] == 100 and img[5, 5] == 0              # band now at y in [1.5, 2.0)
+    assert resample_grid(g, np.eye(4)) is g

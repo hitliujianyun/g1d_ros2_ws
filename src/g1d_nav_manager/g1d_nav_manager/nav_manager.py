@@ -197,6 +197,9 @@ class NavManager(Node):
                 if not g.use_yaw:
                     gyaw = math.atan2(gy - robot[1], gx - robot[0])
                 res.goal.x, res.goal.y, res.goal.theta = gx, gy, gyaw
+                with self.lock:
+                    self.status["goal"] = {"mode": "navigate", "x": gx, "y": gy, "yaw": gyaw,
+                                           "use_yaw": g.use_yaw, "xy_tolerance": 0.2}
                 self.navigate(gh, g, my_id, (gx, gy, gyaw), timeout, nav_handle)
                 if g.use_yaw:
                     p = self.robot_pose()
@@ -308,7 +311,8 @@ class NavManager(Node):
     # ---- status / JSON compatibility --------------------------------------------------------
     def set_status(self, gid, state, reason, res=None):
         with self.lock:
-            self.status = {"goal_id": gid, "state": state, "reason": reason}
+            goal = self.status.get("goal") if self.status.get("goal_id") == gid else None
+            self.status = {"goal_id": gid, "state": state, "reason": reason, "goal": goal}
             if res is not None:
                 self.status.update({
                     "partial": res.partial, "adjusted": res.adjusted,

@@ -1,4 +1,5 @@
-"""Runtime parameters: persisting guard / nav values back into config/g1d_nav.yaml.
+"""Runtime parameters: persisting guard values back into the guard parameter file (g1d_guard.yaml,
+`g1d_guard: ros__parameters:` block, keys indented by 4).
 
 The file is edited line by line so comments and layout survive; a timestamped backup is kept.
 """
@@ -11,9 +12,9 @@ import shutil
 import time
 from typing import Any, Dict, List, Tuple
 
-# Which YAML section holds each target's runtime parameters; read-only entries are skipped.
-SECTIONS = {"guard": "guard", "nav": "manager"}
-READ_ONLY = {"nav": {"mppi_vx_max", "mppi_wz_max"}}
+# Which YAML section (and key indent) holds each target's runtime parameters.
+SECTIONS = {"guard": ("g1d_guard", 4)}
+READ_ONLY: Dict[str, set] = {}
 
 
 def format_value(v: Any) -> str:
@@ -28,13 +29,17 @@ def format_value(v: Any) -> str:
     return str(v)
 
 
-def update_yaml_values(text: str, section: str, values: Dict[str, Any]) -> Tuple[str, List[str]]:
-    """Sets `section.key: value` for every key (indent 2). Returns (new_text, changed_keys)."""
+def update_yaml_values(text: str, section: str, values: Dict[str, Any],
+                       indent: int = 2) -> Tuple[str, List[str]]:
+    """Sets `key: value` (keys indented by `indent`) inside the top-level `section` block.
+    Returns (new_text, changed_keys)."""
     lines = text.splitlines(keepends=True)
+    sp = " " * indent
     start = next((i for i, ln in enumerate(lines) if re.match(rf"^{re.escape(section)}:\s*(#.*)?$", ln)),
                  None)
     if start is None:
-        block = [f"\n{section}:\n"] + [f"  {k}: {format_value(v)}\n" for k, v in values.items()]
+        head = [f"\n{section}:\n"] + (["  ros__parameters:\n"] if indent == 4 else [])
+        block = head + [f"{sp}{k}: {format_value(v)}\n" for k, v in values.items()]
         return "".join(lines) + "".join(block), list(values)
     end = len(lines)
     for i in range(start + 1, len(lines)):
@@ -43,7 +48,7 @@ def update_yaml_values(text: str, section: str, values: Dict[str, Any]) -> Tuple
             break
     changed, remaining = [], dict(values)
     for i in range(start + 1, end):
-        m = re.match(r"^(  )([A-Za-z0-9_]+):(\s*)([^#\r\n]*?)(\s*)(#[^\r\n]*)?(\r?\n)?$", lines[i])
+        m = re.match(rf"^({sp})([A-Za-z0-9_]+):(\s*)([^#\r\n]*?)(\s*)(#[^\r\n]*)?(\r?\n)?$", lines[i])
         if not m or m.group(2) not in remaining:
             continue
         key = m.group(2)
@@ -58,7 +63,7 @@ def update_yaml_values(text: str, section: str, values: Dict[str, Any]) -> Tuple
         insert_at = end
         while insert_at > start + 1 and not lines[insert_at - 1].strip():
             insert_at -= 1
-        new_lines = [f"  {k}: {format_value(v)}\n" for k, v in remaining.items()]
+        new_lines = [f"{sp}{k}: {format_value(v)}\n" for k, v in remaining.items()]
         if insert_at > 0 and not lines[insert_at - 1].endswith("\n"):
             lines[insert_at - 1] += "\n"
         lines[insert_at:insert_at] = new_lines
@@ -72,11 +77,12 @@ def save_params(config_path: str, target: str, params: Dict[str, Any]) -> Dict[s
     values = {k: v for k, v in params.items() if k not in READ_ONLY.get(target, set())}
     with open(config_path, "r", encoding="utf-8", newline="") as f:
         text = f.read()
-    new_text, changed = update_yaml_values(text, SECTIONS[target], values)
+    section, indent = SECTIONS[target]
+    new_text, changed = update_yaml_values(text, section, values, indent)
     backup = f"{config_path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
     shutil.copy2(config_path, backup)
     tmp = config_path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="") as f:
         f.write(new_text)
     os.replace(tmp, config_path)
-    return {"target": target, "section": SECTIONS[target], "changed": changed, "backup": backup}
+    return {"target": target, "section": section, "changed": changed, "backup": backup}
