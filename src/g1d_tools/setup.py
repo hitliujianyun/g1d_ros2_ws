@@ -21,6 +21,10 @@ setup(
         "console_scripts": [
             "check_interfaces = g1d_tools.check_interfaces:main",
             "cmd_vel_probe = g1d_tools.cmd_vel_probe:main",
+            "acceptance = g1d_tools.acceptance:main",
+            "calib_extrinsics = g1d_tools.calib_extrinsics:main",
+            "map_compare = g1d_tools.map_compare:main",
+            "nav_cli = g1d_tools.nav_cli:main",
         ],
     },
 )

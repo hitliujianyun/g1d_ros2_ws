@@ -1,0 +1,34 @@
+{
+  "configById": {
+    "3D!g1d": {
+      "followTf": "base_link",
+      "scene": {"enableStats": false},
+      "transforms": {"frame:base_link": {"visible": true}},
+      "topics": {
+        "/map": {"visible": true, "colorMode": "map"},
+        "/global_costmap/costmap": {"visible": true, "colorMode": "costmap", "alpha": 0.4},
+        "/local_costmap/costmap": {"visible": true, "colorMode": "costmap", "alpha": 0.5},
+        "/g1d/obstacle_cloud": {"visible": true, "pointSize": 2, "colorField": "z", "colorMode": "colormap"},
+        "/chassis/scan": {"visible": true, "pointSize": 4},
+        "/plan": {"visible": true},
+        "/local_plan": {"visible": true},
+        "/robot_description": {"visible": true}
+      },
+      "publish": {"type": "pose_estimate", "poseEstimateTopic": "/initialpose", "poseTopic": "/goal_pose"},
+      "followMode": "follow-position"
+    },
+    "RawMessages!status": {"topicPath": "/nav/status", "diffEnabled": false},
+    "RawMessages!guard": {"topicPath": "/g1d/guard_state", "diffEnabled": false},
+    "RawMessages!loc": {"topicPath": "/g1d/localization_status", "diffEnabled": false}
+  },
+  "layout": {
+    "first": "3D!g1d",
+    "second": {
+      "first": "RawMessages!status",
+      "second": {"first": "RawMessages!guard", "second": "RawMessages!loc", "direction": "column"},
+      "direction": "column"
+    },
+    "direction": "row",
+    "splitPercentage": 72
+  }
+}
