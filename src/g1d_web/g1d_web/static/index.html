@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G1-D 导航调试台</title>
+<link rel="stylesheet" href="/css/app.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/three.module.min.js",
+               "three/addons/OrbitControls.js": "/vendor/three/OrbitControls.js" } }
+</script>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">G1-D 导航调试台</div>
+  <span id="conn" class="pill bad">未连接</span>
+  <span id="navState" class="pill">导航 -</span>
+  <span id="lioState" class="pill">LIO -</span>
+  <span id="guardState" class="pill">guard -</span>
+  <span id="poseText" class="mono dim"></span>
+  <div class="spacer"></div>
+  <span id="ctrlText" class="dim"></span>
+  <button id="btnControl">获取控制权</button>
+  <button id="btnCancel" class="warn">取消导航</button>
+  <button id="btnRelease" class="small">解除急停</button>
+  <button id="btnEstop" class="estop" title="空格键">急停</button>
+</header>
+
+<main>
+  <section id="viewWrap">
+    <div id="view"></div>
+    <div id="layers" class="overlay panel-sm">
+      <div class="ov-title">图层</div>
+      <label><input type="checkbox" data-layer="map" checked> 累积地图</label>
+      <label><input type="checkbox" data-layer="scan" checked> 当前帧点云</label>
+      <label><input type="checkbox" data-layer="obstacles" checked> 障碍点（Mid-360S）</label>
+      <label><input type="checkbox" data-layer="chassis" checked> 底盘雷达</label>
+      <label><input type="checkbox" data-layer="local" checked> 局部代价地图</label>
+      <label><input type="checkbox" data-layer="global"> 全局代价地图</label>
+      <label><input type="checkbox" data-layer="globalPath" checked> 全局路径</label>
+      <label><input type="checkbox" data-layer="localPath"> 局部路径</label>
+      <label><input type="checkbox" data-layer="mppi" checked> MPPI 轨迹</label>
+      <label><input type="checkbox" data-layer="trail" checked> 历史轨迹</label>
+      <label><input type="checkbox" data-layer="sectors" checked> 可通行扇区</label>
+      <label><input type="checkbox" data-layer="mission" checked> 任务航点</label>
+      <label><input type="checkbox" data-layer="grid" checked> 网格</label>
+    </div>
+    <div id="viewTools" class="overlay">
+      <button id="btnView2d" class="small">俯视 2D</button>
+      <button id="btnFollow" class="small toggle on">跟随</button>
+      <button id="btnResetView" class="small">复位视角</button>
+      <button id="btnClearTrail" class="small">清除轨迹</button>
+      <label class="small-label">点大小 <input id="pointSize" type="range" min="1" max="10" value="4"></label>
+    </div>
+    <div id="pickHint" class="overlay hidden">在地面上按下设置位置，拖动设置朝向，松开确认（Esc 取消）</div>
+    <div id="hud" class="overlay mono"></div>
+  </section>
+
+  <aside id="side">
+    <nav id="tabs">
+      <button data-tab="nav" class="active">导航</button>
+      <button data-tab="mission">任务</button>
+      <button data-tab="teleop">遥控</button>
+      <button data-tab="map">建图</button>
+      <button data-tab="test">测试</button>
+      <button data-tab="params">参数</button>
+      <button data-tab="diag">诊断</button>
+    </nav>
+
+    <!-- ===================================================== 导航 -->
+    <div class="tab" id="tab-nav">
+      <h3>下发目标</h3>
+      <div class="form">
+        <label>模式 <select id="gMode"><option value="navigate">navigate（规划 + MPPI）</option>
+          <option value="simple">simple（转向后直行）</option><option value="rotate">rotate（原地转）</option></select></label>
+        <label>坐标系 <select id="gFrame"><option value="odom">odom（地图坐标）</option>
+          <option value="base_at_stamp">base（相对当前车体）</option></select></label>
+        <label>x (m) <input id="gX" type="number" step="0.1" value="1.0"></label>
+        <label>y (m) <input id="gY" type="number" step="0.1" value="0.0"></label>
+        <label>朝向 (°) <input id="gYaw" type="number" step="5" value="0"></label>
+        <label class="check"><input id="gUseYaw" type="checkbox" checked> 到达后对齐朝向</label>
+        <label>限速 (m/s) <input id="gSpeed" type="number" step="0.05" min="0" placeholder="默认"></label>
+        <label>位置容差 (m) <input id="gTol" type="number" step="0.05" value="0.2"></label>
+      </div>
+      <div class="row">
+        <button id="btnPickGoal">地图点选</button>
+        <label class="check"><input id="gAutoSend" type="checkbox" checked> 点选后立即发送</label>
+        <button id="btnSendGoal" class="primary">发送目标</button>
+      </div>
+      <div class="row">
+        <button class="small" data-quick="fwd">前进 1 m</button>
+        <button class="small" data-quick="left">左转 90°</button>
+        <button class="small" data-quick="right">右转 90°</button>
+        <button class="small" data-quick="back">掉头</button>
+      </div>
+      <h3>导航状态</h3>
+      <div id="navStatus" class="kv"></div>
+      <div id="sectorBar" class="sectors"></div>
+    </div>
+
+    <!-- ===================================================== 任务 -->
+    <div class="tab hidden" id="tab-mission">
+      <h3>任务编辑</h3>
+      <div class="form">
+        <label>名称 <input id="mName" value="mission1"></label>
+        <label>循环次数 <input id="mLoops" type="number" min="0" value="1" title="0 = 无限循环"></label>
+        <label>失败策略 <select id="mOnFail"><option value="stop">停止任务</option><option value="skip">跳过该点</option>
+          <option value="retry">重试后跳过</option></select></label>
+        <label>重试次数 <input id="mRetries" type="number" min="0" value="1"></label>
+      </div>
+      <div class="row">
+        <button id="btnPickWp">地图添加航点</button>
+        <button id="btnAddPoseWp" class="small">添加当前位置</button>
+        <button id="btnClearWp" class="small">清空</button>
+      </div>
+      <table class="tbl" id="wpTable"><thead><tr><th>#</th><th>x</th><th>y</th><th>朝向°</th><th>模式</th><th>停留s</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="row">
+        <button id="btnMStart" class="primary">开始</button>
+        <button id="btnMPause">暂停</button>
+        <button id="btnMResume">继续</button>
+        <button id="btnMCancel" class="warn">取消</button>
+      </div>
+      <div id="missionStatus" class="kv"></div>
+      <table class="tbl" id="mResults"><thead><tr><th>圈</th><th>点</th><th>结果</th><th>原因</th><th>用时</th></tr></thead><tbody></tbody></table>
+      <h3>已保存任务</h3>
+      <div class="row">
+        <button id="btnMSave">保存当前任务</button>
+        <select id="mSaved"></select>
+        <button id="btnMLoad" class="small">载入</button>
+        <button id="btnMDelete" class="small">删除</button>
+      </div>
+    </div>
+
+    <!-- ===================================================== 遥控 -->
+    <div class="tab hidden" id="tab-teleop">
+      <h3>Web 遥控</h3>
+      <p class="note">需要控制权。按住摇杆（或 W/A/S/D）才会行驶，松开立即停止（guard 0.3 s deadman）。
+        遥控优先于导航，并会取消正在执行的导航目标；仍经过 guard 的限速和防撞反射层。</p>
+      <canvas id="joystick" width="240" height="240"></canvas>
+      <div class="form">
+        <label>最大线速度 <input id="tVmax" type="range" min="0.05" max="0.3" step="0.05" value="0.2"><span id="tVmaxText"></span></label>
+        <label>最大角速度 <input id="tWmax" type="range" min="0.1" max="0.5" step="0.05" value="0.4"><span id="tWmaxText"></span></label>
+        <label class="check"><input id="tKeys" type="checkbox" checked> 键盘 W/A/S/D（焦点不在输入框时）</label>
+      </div>
+      <div id="teleopText" class="mono"></div>
+    </div>
+
+    <!-- ===================================================== 建图 -->
+    <div class="tab hidden" id="tab-map">
+      <h3>本次运行地图</h3>
+      <p class="note">LIO 配准点云按体素累积（odom 坐标系，不做重定位）。导出包含 PCD 点云、PNG + YAML 栅格（map_server 格式）、轨迹 CSV 和全局代价地图。</p>
+      <div id="mapStats" class="kv"></div>
+      <div class="row">
+        <label>体素 (m) <input id="mapVoxel" type="number" step="0.01" min="0.01" max="1" value="0.05"></label>
+        <button id="btnMapReset" class="warn">重置地图</button>
+        <label class="check"><input id="mapPause" type="checkbox"> 暂停累积</label>
+      </div>
+      <div class="row">
+        <label>着色 <select id="mapColor"><option value="height">按高度</option><option value="mono">单色</option></select></label>
+        <button id="btnMapExport" class="primary">导出地图</button>
+      </div>
+      <h3>已导出</h3>
+      <div id="exports"></div>
+    </div>
+
+    <!-- ===================================================== 测试 -->
+    <div class="tab hidden" id="tab-test">
+      <h3>验收测试 T1–T6</h3>
+      <div class="row">
+        <select id="testSel"></select>
+        <button id="btnTestSelect">选择</button>
+      </div>
+      <div id="testInfo" class="note"></div>
+      <div class="form" id="testArgs">
+        <label>速度 (m/s) <input id="testSpeed" type="number" step="0.05" value="0.3"></label>
+      </div>
+      <div class="row">
+        <button id="btnTestStart" class="primary">开始（一次）</button>
+        <button id="btnTestMark">标记终点</button>
+        <button id="btnTestStop">结束</button>
+        <button id="btnTestAbort" class="warn">中止</button>
+      </div>
+      <div id="testStatus" class="kv"></div>
+      <table class="tbl" id="testTrials"><thead></thead><tbody></tbody></table>
+      <h3>历史结果</h3>
+      <button id="btnTestList" class="small">刷新</button>
+      <div id="testResults"></div>
+    </div>
+
+    <!-- ===================================================== 参数 -->
+    <div class="tab hidden" id="tab-params">
+      <h3>guard（底盘安全守护）</h3>
+      <table class="tbl" id="pGuard"><tbody></tbody></table>
+      <button id="btnSaveGuard" class="small">保存 guard 参数到配置文件</button>
+      <h3>nav（导航）</h3>
+      <table class="tbl" id="pNav"><tbody></tbody></table>
+      <button id="btnSaveNav" class="small">保存 nav 参数到配置文件</button>
+      <p class="note">修改立即生效（热更新）；「保存」写回 config/g1d_nav.yaml（保留注释，自动备份），重启后仍有效。</p>
+      <div id="paramAcks" class="mono small-text"></div>
+    </div>
+
+    <!-- ===================================================== 诊断 -->
+    <div class="tab hidden" id="tab-diag">
+      <h3>话题</h3>
+      <table class="tbl" id="rates"><thead><tr><th>话题</th><th>Hz</th><th>距上次 s</th></tr></thead><tbody></tbody></table>
+      <h3>事件</h3>
+      <div id="events" class="log mono"></div>
+      <h3>原始数据</h3>
+      <select id="rawSel"><option value="status">nav status</option><option value="guard">guard_state</option>
+        <option value="lio">lio_health</option><option value="debug">nav debug</option><option value="cmd">指令</option></select>
+      <pre id="raw" class="mono"></pre>
+    </div>
+  </aside>
+</main>
+<div id="toast"></div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
