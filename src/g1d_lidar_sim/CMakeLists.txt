@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.16)
+project(g1d_lidar_sim)
+
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+add_compile_options(-Wall -Wextra)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(livox_ros_driver2 REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+add_executable(lidar_sim src/lidar_sim_node.cpp)
+target_include_directories(lidar_sim PRIVATE include)
+ament_target_dependencies(lidar_sim rclcpp nav_msgs sensor_msgs livox_ros_driver2 tf2 tf2_ros tf2_eigen)
+target_link_libraries(lidar_sim Eigen3::Eigen)
+
+install(TARGETS lidar_sim DESTINATION lib/${PROJECT_NAME})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_sim_core test/test_sim_core.cpp)
+  target_include_directories(test_sim_core PRIVATE include)
+  target_link_libraries(test_sim_core Eigen3::Eigen)
+endif()
+
+ament_package()
