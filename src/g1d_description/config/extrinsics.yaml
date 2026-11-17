@@ -1,0 +1,5 @@
+# G1-D 外参（m / rad）。g1d_tools 标定工具写回本文件；修改后重启 description.launch.py。
+base_to_agv_z: 0.10                          # base_link（地面）-> AGV_link 高度【待实测】
+head_to_livox_xyz: [0.05, 0.0, 0.55]         # head_link -> livox_frame 平移【待标定】
+head_to_livox_rpy: [3.14159265, -0.04, 0.0]  # 倒装：roll = pi【待标定】
+livox_to_imu_xyz: [0.011, 0.02329, -0.04412] # Mid-360 内置 IMU 在点云坐标系中的位置（Livox 手册）

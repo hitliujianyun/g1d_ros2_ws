@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!-- G1-D with navigation frames. The upstream URDF is included unmodified (apart from mesh paths);
+     values marked "to measure / calibrate" come from config/extrinsics.yaml. -->
+<robot name="g1d" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- base_link (ground projection of the chassis centre) -> AGV_link height: to measure -->
+  <xacro:arg name="base_to_agv_z" default="0.10"/>
+  <!-- head_link -> Mid-360S (mounted upside down): to calibrate -->
+  <xacro:arg name="head_to_livox_xyz" default="0.05 0 0.55"/>
+  <xacro:arg name="head_to_livox_rpy" default="3.14159265 -0.04 0"/>
+  <!-- Mid-360 built-in IMU position in the point-cloud frame (Livox manual) -->
+  <xacro:arg name="livox_to_imu_xyz" default="0.011 0.02329 -0.04412"/>
+
+  <xacro:include filename="g1_d_with_dex1_1.urdf"/>
+
+  <link name="base_link"/>
+  <joint name="base_to_agv_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="AGV_link"/>
+    <origin xyz="0 0 $(arg base_to_agv_z)" rpy="0 0 0"/>
+  </joint>
+
+  <link name="livox_frame"/>
+  <joint name="head_to_livox_joint" type="fixed">
+    <parent link="head_link"/>
+    <child link="livox_frame"/>
+    <origin xyz="$(arg head_to_livox_xyz)" rpy="$(arg head_to_livox_rpy)"/>
+  </joint>
+
+  <link name="livox_imu"/>
+  <joint name="livox_to_imu_joint" type="fixed">
+    <parent link="livox_frame"/>
+    <child link="livox_imu"/>
+    <origin xyz="$(arg livox_to_imu_xyz)" rpy="0 0 0"/>
+  </joint>
+
+  <link name="chassis_laser"/>
+  <joint name="chassis_laser_joint" type="fixed">
+    <parent link="Lidar_Link"/>
+    <child link="chassis_laser"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>

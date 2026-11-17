@@ -87,7 +87,7 @@
 
 **内容：**
 - 第一次提交：HF `unitreerobotics/unitree_sim_isaaclab_usds@main assets/urdf/g1_d_description/g1_d_with_dex1_1.urdf` 原样。第二次提交补丁：mesh 路径改为 `package://g1d_description/meshes/<file>`。
-- `g1d.urdf.xacro`：参数 `base_to_agv_z`（默认 0.10，待实测）、`head_to_livox_xyz`（`0.05 0 0.55`）、`head_to_livox_rpy`（`3.14159265 -0.04 0`）、`livox_to_imu_xyz`（`-0.011 -0.02329 0.04412`）；`xacro:include` 原 URDF；新增 `base_link → AGV_link`、`head_link → livox_frame`、`livox_frame → livox_imu`、`Lidar_Link → chassis_laser`（单位）。
+- `g1d.urdf.xacro`：参数 `base_to_agv_z`（默认 0.10，待实测）、`head_to_livox_xyz`（`0.05 0 0.55`）、`head_to_livox_rpy`（`3.14159265 -0.04 0`）、`livox_to_imu_xyz`（`0.011 0.02329 -0.04412`，IMU 在雷达系中的位置 = FAST-LIO `extrinsic_T` 取反）；`xacro:include` 原 URDF；新增 `base_link → AGV_link`、`head_link → livox_frame`、`livox_frame → livox_imu`、`Lidar_Link → chassis_laser`（单位）。
 - `config/extrinsics.yaml`：以上参数（标定工具写回此文件）。
 - `launch/description.launch.py`：读 `extrinsics.yaml`，xacro 生成 `robot_description`，启动 `robot_state_publisher`（`publish_frequency 50`）。
 - `scripts/fetch_meshes.py`：从 HF 下载 URDF 引用的 STL 到包内 `meshes/`（不入库）。

@@ -93,7 +93,7 @@ AGV_link ─(固定)→ chassis_laser（URDF Lidar_Link，xyz [0.1871, −0.0161
 
 - `base_link`：底盘中心的地面投影，x 前、y 左。`base_link → AGV_link` 的高度 `base_to_agv_z`【待实测】。
 - 关节由 `/joint_states` 驱动：`LZ_mt_Joint = LZ_it_Joint = h/2`，`h = lift_scale · hispeed_state.y + lift_offset`【scale / offset 待实测】；`Yaw_Joint` = 腰俯仰（`/waistpitchstate.q`）；`torso_Joint` = 腰偏航（`/lowstate.motor_state[12].q`）；双臂 15–28 号。
-- `head_link → livox_frame` 初值 xyz `[0.05, 0, 0.55]`、rpy `[π, −0.04, 0]`（倒装）【待标定】；`livox_frame → livox_imu` 用 FAST-LIO `mid360.yaml` 的 `extrinsic_T [−0.011, −0.02329, 0.04412]`、R = I。
+- `head_link → livox_frame` 初值 xyz `[0.05, 0, 0.55]`、rpy `[π, −0.04, 0]`（倒装）【待标定】；`livox_frame → livox_imu` = `(0.011, 0.02329, −0.04412)`、R = I（Livox 手册：IMU 在点云坐标系中的位置；即 FAST-LIO `mid360.yaml` 中 `extrinsic_T [−0.011, −0.02329, 0.04412]`（雷达在 IMU 系中的位置）取反）。
 
 ### 4.2 时间
 
