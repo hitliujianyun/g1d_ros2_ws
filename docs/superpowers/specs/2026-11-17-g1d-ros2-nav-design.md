@@ -103,7 +103,7 @@ AGV_link ─(固定)→ chassis_laser（URDF Lidar_Link，xyz [0.1871, −0.0161
 |---|---|
 | SLAMWARE odom / scan | 时间戳比主机慢约 181 s 且每天漂移 →  按主机接收时间重打 |
 | `lowstate` / `hispeed_state` / `waistpitchstate` | 无消息头 → 按主机接收时间 |
-| Mid-360S | 未做 PTP 时是雷达上电计时 → livox_ros_driver2 补丁：包时间映射到主机时间（"接收时刻 − 雷达时间"的滑动最小值，复用 `g1d_ws` 的 `ClockMapper`），逐点相对时间不变。网线连接时可选 PTP |
+| Mid-360S | livox_ros_driver2（`2144554`）在雷达未同步时按主机 `high_resolution_clock::now()`（= system_clock）给每个包打戳，同步（PTP / gPTP，主时钟为主机）时用 PTP 时间 → 已是主机时钟，**无需补丁**（M3 阅读源码后修订；原计划的时钟映射取消）。网线连接时可选 PTP 以去掉接收抖动 |
 
 因此不需要 PC2 与主机的时钟同步。
 
