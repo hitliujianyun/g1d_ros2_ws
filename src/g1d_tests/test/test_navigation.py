@@ -51,7 +51,7 @@ class TestNavigation(unittest.TestCase):
         n.create_subscription(Bool, "/sim/collided", lambda m: cls.collided.__setitem__(0, m.data), 10)
         n.create_subscription(Float32, "/sim/min_gap",
                               lambda m: cls.gap.__setitem__(0, min(cls.gap[0], m.data)), 10)
-        cls.blocked, cls.n_cmd = {}, [0]
+        cls.blocked, cls.n_cmd, cls.guard_log = {}, [0], []
         n.create_subscription(GuardState, "/g1d/guard_state", cls.on_guard, 10)
         n.create_subscription(Twist, "/nav/cmd_vel", lambda m: cls.n_cmd.__setitem__(0, cls.n_cmd[0] + 1), 50)
         cls.nav = NavClient(n)
@@ -62,6 +62,17 @@ class TestNavigation(unittest.TestCase):
         key = m.blocked or ("estop" if m.estop else "manual" if m.manual else "")
         if key:
             cls.blocked[key] = cls.blocked.get(key, 0) + 1
+        cls.guard_log.append((m.v_cmd, m.v_target, m.v, m.w_cmd, m.front_clear))
+
+    def guard_summary(self):
+        g = self.guard_log
+        if not g:
+            return {}
+        mean = lambda i: round(sum(abs(s[i]) for s in g) / len(g), 3)  # noqa: E731
+        slowed = sum(1 for s in g if s[0] > 0.05 and s[1] < 0.5 * s[0])
+        return {"v_cmd": mean(0), "v_target": mean(1), "v_out": mean(2), "w_cmd": mean(3),
+                "slowed_frac": round(slowed / len(g), 2),
+                "front_clear_min": round(min(s[4] for s in g), 2)}
 
     @classmethod
     def tearDownClass(cls):
@@ -82,15 +93,18 @@ class TestNavigation(unittest.TestCase):
     def run_goal(self, name, **kw):
         t0 = time.monotonic()
         self.blocked.clear()
-        n0 = self.n_cmd[0]
+        self.guard_log.clear()
+        n0, g0 = self.n_cmd[0], len(self.gt)
         gid = self.nav.send(**kw)
         r = self.nav.wait(gid, timeout=150.0)
         p = self.gt_pose()
         dt = time.monotonic() - t0
+        track = [[round(v, 2) for v in planar(m)] for m in self.gt[g0::100]]  # ground truth ~1 Hz
         self.report[name] = {"result": r, "gt_final": [round(v, 3) for v in p],
                              "time_s": round(dt, 1), "min_gap_m": round(self.gap[0], 3),
                              "collided": self.collided[0], "guard_blocked_10hz": dict(self.blocked),
-                             "nav_cmd_hz": round((self.n_cmd[0] - n0) / max(dt, 1e-3), 1)}
+                             "nav_cmd_hz": round((self.n_cmd[0] - n0) / max(dt, 1e-3), 1),
+                             "guard": self.guard_summary(), "track": track}
         print(f"{name}: {self.report[name]}")
         return r, p
 
