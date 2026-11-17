@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.16)
+project(g1d_lidar)
+
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+add_compile_options(-Wall -Wextra)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(livox_ros_driver2 REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+add_executable(self_filter src/self_filter_node.cpp)
+target_include_directories(self_filter PRIVATE include)
+ament_target_dependencies(self_filter rclcpp livox_ros_driver2 tf2 tf2_ros tf2_eigen)
+target_link_libraries(self_filter Eigen3::Eigen)
+
+add_executable(utlidar_adapter src/utlidar_adapter_node.cpp)
+target_include_directories(utlidar_adapter PRIVATE include)
+ament_target_dependencies(utlidar_adapter rclcpp sensor_msgs livox_ros_driver2)
+
+install(TARGETS self_filter utlidar_adapter DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY include/ DESTINATION include)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_lidar_core test/test_lidar_core.cpp)
+  target_include_directories(test_lidar_core PRIVATE include)
+  target_link_libraries(test_lidar_core Eigen3::Eigen)
+endif()
+
+ament_export_include_directories(include)
+ament_package()
