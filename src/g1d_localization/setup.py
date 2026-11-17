@@ -17,5 +17,8 @@ setup(
     description="G1-D localization nodes",
     license="Apache-2.0",
     tests_require=["pytest"],
-    entry_points={"console_scripts": ["lio_bridge = g1d_localization.lio_bridge:main"]},
+    entry_points={"console_scripts": [
+        "lio_bridge = g1d_localization.lio_bridge:main",
+        "localization_monitor = g1d_localization.localization_monitor:main",
+    ]},
 )

@@ -26,7 +26,7 @@ def generate_launch_description():
         DeclareLaunchArgument("require_cloud", default_value=lio,
                               description="guard needs Mid-360 obstacle points (default: = lio)"),
         DeclareLaunchArgument("guard", default_value="true"),
-        DeclareLaunchArgument("point_filter_num", default_value="2"),
+        DeclareLaunchArgument("point_filter_num", default_value="1"),
         DeclareLaunchArgument("mapping", default_value="false", description="pgo + map_manager (needs lio:=true)"),
         DeclareLaunchArgument("maps_dir", default_value="~/g1d_maps"),
         Node(package="g1d_sim", executable="chassis_sim", name="chassis_sim", output="screen",

@@ -50,7 +50,7 @@ class ChassisSim(Node):
         p = lambda n, v: self.declare_parameter(n, v).value  # noqa: E731
         self.boxes = load_world(resolve_world(p("world", "empty")))
         start = [float(v) for v in p("start", [0.0, 0.0, 0.0])]
-        self.rate = float(p("rate_hz", 50.0))
+        self.rate = float(p("rate_hz", 100.0))      # integer divisors for 20 Hz odom / 10 Hz scan
         self.odom_every = max(1, round(self.rate / float(p("odom_hz", 20.0))))
         self.scan_every = max(1, round(self.rate / float(p("scan_hz", 10.0))))
         self.joy_every = max(1, round(self.rate / float(p("joy_hz", 20.0))))

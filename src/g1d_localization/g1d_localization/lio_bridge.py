@@ -8,6 +8,7 @@ No TF is published while LIO is missing or older than `max_extrapolation_s`: dow
 """
 import math
 
+import numpy as np
 import rclpy
 from g1d_core.lio import BridgeState, HealthParams, LioHealth, make_tf, matrix_to_quat
 from g1d_msgs.msg import LioHealth as LioHealthMsg
@@ -16,6 +17,8 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py import point_cloud2
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 BEST_EFFORT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
@@ -61,6 +64,11 @@ class LioBridge(Node):
         self.create_subscription(Odometry, d("lio_topic", "/Odometry").value, self.on_lio, 20)
         self.create_subscription(Odometry, d("wheel_topic", "/chassis/odom").value, self.on_wheel,
                                  BEST_EFFORT)
+        # odom-frame copy of the de-skewed scan for the relocalization (small_gicp)
+        self.registered_max_points = int(d("registered_max_points", 20000).value)
+        self.pub_registered = self.create_publisher(PointCloud2, "/g1d/registered_scan", 10)
+        self.create_subscription(PointCloud2, d("scan_topic", "/g1d/obstacle_cloud").value,
+                                 self.on_scan, BEST_EFFORT)
         self.create_timer(1.0 / rate, self.tick)
         self.create_timer(0.2, self.publish_health)
 
@@ -105,6 +113,23 @@ class LioBridge(Node):
         r = t.transform.rotation
         r.x, r.y, r.z, r.w = q
         self.pub_anchor.publish(t)
+
+    def on_scan(self, m: PointCloud2) -> None:
+        if self.pub_registered.get_subscription_count() == 0:
+            return
+        try:
+            t = self.tf.lookup_transform(self.odom_frame, m.header.frame_id, Time.from_msg(m.header.stamp))
+        except TransformException:
+            return
+        tr, q = t.transform.translation, t.transform.rotation
+        T = make_tf((tr.x, tr.y, tr.z), (q.x, q.y, q.z, q.w))
+        xyz = point_cloud2.read_points_numpy(m, field_names=("x", "y", "z"), skip_nans=True)
+        if len(xyz) > self.registered_max_points:
+            xyz = xyz[:: int(math.ceil(len(xyz) / self.registered_max_points))]
+        pts = (xyz.astype(np.float64) @ T[:3, :3].T + T[:3, 3]).astype(np.float32)
+        hdr = m.header
+        hdr.frame_id = self.odom_frame
+        self.pub_registered.publish(point_cloud2.create_cloud_xyz32(hdr, pts))
 
     def tick(self) -> None:
         now = self.get_clock().now()

@@ -23,6 +23,10 @@
   <exec_depend>fast_lio</exec_depend>
   <exec_depend>pgo</exec_depend>
   <exec_depend>g1d_mapping</exec_depend>
+  <exec_depend>small_gicp_relocalization</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
