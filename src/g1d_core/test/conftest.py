@@ -3,26 +3,27 @@ import os
 import pytest
 
 
-def _find_description_dir():
-    env = os.environ.get("G1D_DESCRIPTION_DIR")
+def find_package_dir(name, marker):
+    """Source tree sibling package (Windows / pytest from the repo) or installed share dir."""
+    env = os.environ.get(f"{name.upper()}_DIR")
     if env:
         return env
     d = os.path.dirname(os.path.abspath(__file__))
     for _ in range(6):
-        cand = os.path.join(d, "g1d_description")
-        if os.path.isdir(os.path.join(cand, "urdf")):
+        cand = os.path.join(d, name)
+        if os.path.exists(os.path.join(cand, marker)):
             return cand
         d = os.path.dirname(d)
     try:  # installed workspace (colcon test from the build directory)
         from ament_index_python.packages import get_package_share_directory
-        return get_package_share_directory("g1d_description")
+        return get_package_share_directory(name)
     except Exception:  # noqa: BLE001
         return None
 
 
 @pytest.fixture(scope="session")
 def description_dir():
-    d = _find_description_dir()
+    d = find_package_dir("g1d_description", "urdf")
     if d is None:
         pytest.skip("g1d_description not found (set G1D_DESCRIPTION_DIR)")
     return d
@@ -31,3 +32,11 @@ def description_dir():
 @pytest.fixture(scope="session")
 def g1d_urdf_path(description_dir):
     return os.path.join(description_dir, "urdf", "g1_d_with_dex1_1.urdf")
+
+
+@pytest.fixture(scope="session")
+def worlds_dir():
+    d = find_package_dir("g1d_sim", "worlds")
+    if d is None:
+        pytest.skip("g1d_sim worlds not found (set G1D_SIM_DIR)")
+    return os.path.join(d, "worlds")
