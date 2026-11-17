@@ -3,8 +3,8 @@ import math
 import numpy as np
 import pytest
 
-from g1d_nav_py.calib import (align_vectors, estimate_yaw, fit_floor, level_rotation,
-                              matrix_to_rpy, rpy_to_matrix)
+from g1d_core.calib import (align_vectors, estimate_yaw, fit_floor, level_rotation,
+                            matrix_to_rpy, rpy_to_matrix)
 
 
 def test_rpy_roundtrip_matches_zyx():

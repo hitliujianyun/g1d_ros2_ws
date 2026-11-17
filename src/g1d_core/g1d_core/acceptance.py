@@ -1,8 +1,9 @@
-"""Acceptance tests T1–T6 (design doc §12.4) as guided, self-measuring procedures.
+"""Acceptance tests T1–T7 as guided, self-measuring procedures (migrated from g1d_ws@068e6dd).
 
-Each test is pure logic: tick(now, obs) returns actions for the app to publish.
-  obs:     {"pose": (x, y, yaw) | None, "v": float, "w": float, "guard": dict, "status": dict}
-  actions: ("teleop", v, w) | ("goal", goal_dict) | ("stop_nav",)
+Each test is pure logic: tick(now, obs) returns actions for the app (g1d_tools acceptance, g1d_web).
+  obs:     {"pose": (x, y, yaw) odom | None, "map_pose": (x, y, yaw) map | None, "v": float, "w": float,
+            "guard": dict (GuardState fields), "status": dict (/nav/status JSON)}
+  actions: ("teleop", v, w) | ("goal", goal_dict in the /nav/goal JSON format) | ("stop_nav",)
 """
 from __future__ import annotations
 
@@ -171,7 +172,7 @@ class T3LoopClosure(AcceptanceTest):
 
     def start(self, now, obs):
         if obs.get("pose") is None:
-            return self.abort(now, "没有位姿（g1d_nav 未运行？）")
+            return self.abort(now, "没有位姿（lio_bridge 未运行？）")
         self.state, self.phase, self.pose0 = "running", "driving", obs["pose"]
         self.path_len, self.last = 0.0, obs["pose"]
         self.message = "已记录起点，绕行后回到标记处点「标记终点」"
@@ -208,7 +209,7 @@ class T4RotationDrift(AcceptanceTest):
 
     def start(self, now, obs):
         if obs.get("pose") is None:
-            return self.abort(now, "没有位姿（g1d_nav 未运行？）")
+            return self.abort(now, "没有位姿（lio_bridge 未运行？）")
         self.turns = int(self.args.get("turns", 12))
         self.state, self.phase, self.pose0, self.done_turns = "running", "rotating", obs["pose"], 0
         self.max_dev = 0.0
@@ -269,7 +270,8 @@ class NavTrials(AcceptanceTest):
         st = obs.get("status") or {}
         gid = st.get("goal_id") or ""
         g = obs.get("guard") or {}
-        if gid and not gid.startswith("t4-") and st.get("state") in ("NAVIGATING", "RECOVERING", "ROTATING"):
+        if gid and not gid.startswith("t4-") and st.get("state") in ("PLANNING", "NAVIGATING", "RECOVERING",
+                                                                      "ROTATING", "DRIVING"):
             if gid != self.current:
                 self.current, self.cur_min_clear, self.cur_estop, self.t_goal = gid, math.inf, False, now
             fc = g.get("front_clear")
@@ -318,8 +320,57 @@ class T6Overhang(NavTrials):
         return out
 
 
+class T7Relocalization(AcceptanceTest):
+    """Relocalization repeatability: the robot is driven back to the same floor marker several times
+    (different directions, after restarts or /g1d/relocalize); the map-frame poses must agree."""
+    id = "T7"
+    title = "T7 重定位重复精度"
+    instructions = ("地面贴标记，机器人对准标记（同一朝向）。点「开始」后，每次回到标记并摆正时点「标记」"
+                    "（可在两次之间重启定位或调用 /g1d/relocalize）。≥ 5 次后计算 map 系位姿的离散程度。")
+    target_trials = 5
+    needs_control = False
+
+    def start(self, now, obs):
+        self.state, self.phase = "running", "marking"
+        self.message = "回到标记处并摆正后点「标记」"
+        return []
+
+    def mark(self, now, obs):
+        p = obs.get("map_pose")
+        if self.state != "running" or p is None:
+            self.message = "没有 map 系位姿（定位未运行或未收敛）"
+            return []
+        self.trials.append({"x": round(p[0], 4), "y": round(p[1], 4), "yaw": round(p[2], 5), "ok": True})
+        self.message = f"已记录 {len(self.trials)} 次"
+        return []
+
+    def spread(self):
+        if len(self.trials) < 2:
+            return None
+        xy = [(t["x"], t["y"]) for t in self.trials]
+        mx = sum(x for x, _ in xy) / len(xy)
+        my = sum(y for _, y in xy) / len(xy)
+        yaw0 = self.trials[0]["yaw"]
+        dyaw = [wrap(t["yaw"] - yaw0) for t in self.trials]
+        my_ = sum(dyaw) / len(dyaw)
+        return {"max_pos_dev_m": max(math.hypot(x - mx, y - my) for x, y in xy),
+                "max_yaw_dev_deg": max(abs(math.degrees(d - my_)) for d in dyaw)}
+
+    def passed(self):
+        if len(self.trials) < self.target_trials:
+            return None
+        s = self.spread()
+        return (s["max_pos_dev_m"] < float(self.args.get("max_pos_m", 0.05)) and
+                s["max_yaw_dev_deg"] < float(self.args.get("max_yaw_deg", 1.0)))
+
+    def summary(self):
+        out = super().summary()
+        out["spread"] = self.spread()
+        return out
+
+
 TESTS = {c.id: c for c in (T1StopDistance, T2StreamLoss, T3LoopClosure, T4RotationDrift,
-                           T5Corridor, T6Overhang)}
+                           T5Corridor, T6Overhang, T7Relocalization)}
 
 
 def catalog() -> List[Dict[str, Any]]:
