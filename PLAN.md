@@ -50,22 +50,24 @@
 - [x] small_gicp 子模块 @fa0cfc9；small_gicp_relocalization @81c9bd3 vendor：C++17、`~/status`、依赖顺序
 - [x] `g1d_core.reloc`：以建图轨迹为种子的全局搜索（体素命中率、粗到细）——替代 KISS-Matcher（依赖链更轻，单测覆盖）
 - [x] `localization_monitor`（定位状态、`/g1d/relocalize` pose | auto | last、上次位姿、启动初始化）；`localization.launch.py`（map | odom，含 map_server）
-- [ ] CI：自动初始化、行驶跟踪、错误初值重新收敛（测试已写，等待 CI 结果）
+- [x] CI：自动初始化（0.01–0.05 m）、行驶跟踪、错误初值（0.4 m / 15°）3–8 s 重新收敛（< 0.02 m）
+- [x] 修复：启动自动搜索并发执行；small_gicp 用最新 TF 处理延迟的 `/initialpose`（vendor 补丁）
 
 ### M6 导航
-- [ ] Nav2 参数（代价地图、MPPI、RotationShim、BT）
-- [ ] `g1d_nav_manager`（NavigateRelative、延迟补偿、目标外移、reason、free_sectors、JSON 兼容层、客户端库）
-- [ ] CI：绕障、桌面悬空、目标在障碍内、延迟补偿
+- [x] Nav2 参数（体素 / 底盘雷达 / 膨胀代价地图、NavFn、RotationShim + MPPI、行为、BT），`navigation.launch.py`（map | odom，`profile:=sim` 轻量 MPPI）
+- [x] `g1d_nav_manager`（NavigateRelative：navigate / rotate / simple / stop；base_at_stamp 延迟补偿；目标截断 / 外移 / 拒绝；Nav2 错误码 → reason；free_sectors；JSON 兼容层；`NavClient` + `prompt_feedback`）
+- [ ] CI：绕障、目标在障碍内、延迟补偿、桌面悬空、不可达（调试中：CI 机器上控制频率不足 → sim 轻量配置）
 
 ### M7 可视化与工具
-- [ ] RViz2 / Foxglove 配置
-- [ ] 录制预设、标定工具、T1–T6 + 建图 / 重定位指标
+- [x] RViz2 配置、Foxglove 布局、`viz.launch.py`、`record.launch.py`（mapping / nav / debug，MCAP）
+- [x] `calib_extrinsics`（地面 + 底盘雷达偏航，写回 extrinsics.yaml）、`acceptance`（T1–T7 向导 + 报告）、`map_compare`（重复建图一致性）、`nav_cli`
+- [x] `g1d_core`：calib / acceptance 原样导入后适配，新增 T7 重定位重复精度、地图一致性（无 scipy 的 ICP）
 
 ### M8 Web 调试台
-- [ ] `g1d_web` 迁移（rclpy hub）+ 端到端测试
+- [x] `g1d_web` 原样导入后迁移：rclpy hub（接口不变）、显示坐标系重采样、守护参数走 ROS 参数服务并写回 guard.yaml、界面新增初始位姿 / 自动重定位 / 保存地图；单测 14 项 + hub 的 ROS 测试
 
 ### M9 文档
-- [ ] README、docs/PROJECT_OVERVIEW、docs/DEPLOYMENT（移植 + 参数 + 分阶段上线 + 故障排查）、docs/CALIBRATION
+- [x] README、docs/PROJECT_OVERVIEW、docs/DEPLOYMENT（移植 + 参数清单 + 分阶段上线 + 故障排查）、docs/CALIBRATION
 
 ## 3. 进度日志
 
@@ -77,6 +79,10 @@
 | 2026-11-17 | M3：上游阅读后取消时钟映射补丁；vendor livox_ros_driver2 / FAST_LIO（补丁均为独立提交）；自身点过滤、宇树话题适配、雷达仿真、lio_bridge。CI：约 8 m 方形闭环位置误差 0.087–0.088 m（要求 < 0.10）、航向 0.02–0.04°，自身点漏检 0。踩坑：驱动 `.gitignore` 忽略了 package.xml |
 | 2026-11-17 | M4：vendor pgo（GTSAM），map_manager 保存地图。CI：8 万点、48 关键帧，点到真实表面距离中位数 3.0 cm / P90 9.2 cm，栅格占据精度 0.889 |
 | 2026-11-17 | M5：small_gicp 重定位 + 自研种子全局搜索 + 定位监控。单测：3 个位姿均在 0.2 m / 5° 内找到，陌生扫描被拒绝 |
+
+| 2026-11-17 | M5 CI：自动初始化、跟踪、重新收敛通过。M6：Nav2 + nav_manager；首轮 BT 插件名写法错误（Jazzy 用 `::`）；第二轮 CI 上机器人几乎不动（4 核 CI 被 LIO 仿真 + MPPI 占满）→ 仿真轻量 MPPI 配置。M7 工具、M8 Web、M9 文档完成 |
+
+**与设计文档的差异（均已在设计文档 / UPSTREAM.md 中注明）**：时钟映射补丁取消（驱动已用主机时钟）；KISS-Matcher 改为以建图轨迹为种子的全局搜索（依赖更轻、可单测）；守护 `vx_max` 0.40、减速度保持 1.5 m/s²（防前倾）、`cmd_timeout` 0.25 s；目标外移搜索半径 1.0 m；Mid-360 IMU 外参符号修正。
 
 ## 4. 上机待办（本机无法完成）
 
