@@ -1,3 +1,11 @@
+# g1d: built directly by colcon (upstream build.sh passes these and copies package_ROS2.xml)
+if(NOT ROS_EDITION)
+  set(ROS_EDITION "ROS2")
+endif()
+if(NOT DISTRO_ROS)
+  set(DISTRO_ROS "$ENV{ROS_DISTRO}")
+endif()
+
 # judge which cmake codes to use 
 if(ROS_EDITION STREQUAL "ROS1")
 
@@ -196,9 +204,9 @@ else(ROS_EDITION STREQUAL "ROS2")
     set(CMAKE_C_STANDARD 99)
   endif()
 
-  # Default to C++14
+  # Default to C++17 (g1d: rclcpp on Humble / Jazzy requires C++17)
   if(NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 14)
+    set(CMAKE_CXX_STANDARD 17)
   endif()
 
   list(INSERT CMAKE_MODULE_PATH 0 "${PROJECT_SOURCE_DIR}/cmake/modules")
