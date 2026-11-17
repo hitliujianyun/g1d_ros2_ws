@@ -2,6 +2,7 @@
 
     ros2 launch g1d_bringup navigation.launch.py global_frame:=map    # with localization mode:=map
     ros2 launch g1d_bringup navigation.launch.py global_frame:=odom   # no prior map (rolling global costmap)
+    ros2 launch g1d_bringup navigation.launch.py overlay:=my_tuning.yaml   # or env G1D_NAV2_OVERLAY
 Velocity commands go to /nav/cmd_vel; g1d_guard forwards them to /cmd_vel_no_limit.
 """
 import os
@@ -11,7 +12,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 
 NAV2_NODES = ["controller_server", "planner_server", "behavior_server", "bt_navigator", "waypoint_follower"]
@@ -34,12 +35,27 @@ def rewrite(params: dict, global_frame: str, profile: str = "robot") -> dict:
     return params
 
 
+def merge(base: dict, over: dict) -> dict:
+    """Deep merge; a mapping value replaces a non-mapping one, None deletes the key."""
+    for k, v in over.items():
+        if v is None:
+            base.pop(k, None)
+        elif isinstance(v, dict) and isinstance(base.get(k), dict):
+            merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
 def _nodes(context):
     share = get_package_share_directory("g1d_bringup")
     arg = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     gf = arg("global_frame")
     with open(arg("params") or os.path.join(share, "config", "nav2.yaml"), encoding="utf-8") as f:
         params = rewrite(yaml.safe_load(f), gf, arg("profile"))
+    if arg("overlay"):
+        with open(arg("overlay"), encoding="utf-8") as f:
+            params = merge(params, yaml.safe_load(f) or {})
     fd, path = tempfile.mkstemp(prefix="g1d_nav2_", suffix=".yaml")
     with os.fdopen(fd, "w") as f:
         yaml.safe_dump(params, f, sort_keys=False)
@@ -69,5 +85,7 @@ def generate_launch_description():
         DeclareLaunchArgument("params", default_value="", description="Nav2 params (default config/nav2.yaml)"),
         DeclareLaunchArgument("profile", default_value="robot",
                               description="robot | sim (lighter MPPI for small CI machines)"),
+        DeclareLaunchArgument("overlay", default_value=EnvironmentVariable("G1D_NAV2_OVERLAY", default_value=""),
+                              description="YAML deep-merged over the params after the profile (tuning)"),
         OpaqueFunction(function=_nodes),
     ])
