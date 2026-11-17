@@ -98,8 +98,10 @@ class LioAnchor:
     def anchored(self) -> bool:
         return self.t_odom_lio is not None
 
-    def anchor(self, t_lio_imu: np.ndarray, t_base_imu: np.ndarray) -> None:
-        self.t_odom_lio = t_base_imu @ inv(t_lio_imu)
+    def anchor(self, t_lio_imu: np.ndarray, t_base_imu: np.ndarray,
+               t_odom_base: Optional[np.ndarray] = None) -> None:
+        """T_odom_lio such that the current LIO pose maps to t_odom_base (default: the odom origin)."""
+        self.t_odom_lio = (np.eye(4) if t_odom_base is None else t_odom_base) @ t_base_imu @ inv(t_lio_imu)
 
     def base_pose(self, t_lio_imu: np.ndarray, t_base_imu: np.ndarray) -> np.ndarray:
         """T_odom_base (4x4); anchors on the first call."""
@@ -217,16 +219,39 @@ class LioHealth:
         return not errs, sorted(errs)
 
 
+def planar_matrix(p: Planar) -> np.ndarray:
+    m = np.eye(4)
+    c, s = math.cos(p[2]), math.sin(p[2])
+    m[:2, :2] = [[c, -s], [s, c]]
+    m[:2, 3] = p[:2]
+    return m
+
+
 @dataclass
 class BridgeState:
-    """Glue used by the ROS node: last LIO base pose + wheel extrapolation."""
+    """Glue used by the ROS node: last LIO base pose + wheel extrapolation.
+
+    A LIO gap longer than reanchor_gap_s (FAST_LIO restarted with a new world frame, or stalled)
+    re-anchors odom so the first new pose continues from the last one plus the wheel motion.
+    """
     anchor: LioAnchor = field(default_factory=LioAnchor)
-    wheel: WheelOdomBuffer = field(default_factory=WheelOdomBuffer)
+    wheel: WheelOdomBuffer = field(default_factory=lambda: WheelOdomBuffer(horizon_s=60.0))
     health: LioHealth = field(default_factory=LioHealth)
     last: Optional[LioSample] = None
     max_extrapolation_s: float = 0.5
+    reanchor_gap_s: float = 1.0
+    reanchors: int = 0
+    reanchored: bool = False          # the last on_lio() re-anchored
 
     def on_lio(self, t: float, t_lio_imu: np.ndarray, t_base_imu: np.ndarray) -> LioSample:
+        self.reanchored = False
+        if self.last is not None and t - self.last.t > self.reanchor_gap_s:
+            d = self.wheel.delta(self.last.t, t)
+            expected = self.last.pose if d is None else compose2(self.last.pose, d)
+            self.anchor.anchor(t_lio_imu, t_base_imu, planar_matrix(expected))
+            self.health.hist.clear()
+            self.reanchors += 1
+            self.reanchored = True
         t_odom_base = self.anchor.base_pose(t_lio_imu, t_base_imu)
         roll, pitch = tilt_of(t_odom_base)
         s = LioSample(t, planar(t_odom_base), float(t_odom_base[2, 3]), roll, pitch)

@@ -18,7 +18,7 @@ from g1d_core.lio import wrap
 from g1d_msgs.msg import GuardState
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
 from std_msgs.msg import Bool, Float32
 
 from g1d_nav_manager.client import NavClient
@@ -52,6 +52,9 @@ class TestNavigation(unittest.TestCase):
         n.create_subscription(Float32, "/sim/min_gap",
                               lambda m: cls.gap.__setitem__(0, min(cls.gap[0], m.data)), 10)
         cls.blocked, cls.n_cmd, cls.guard_log = {}, [0], []
+        cls.odom_v, cls.plans = [], []
+        n.create_subscription(Odometry, "/odometry", lambda m: cls.odom_v.append(m.twist.twist.linear.x), 50)
+        n.create_subscription(Path, "/plan", cls.plans.append, 10)
         n.create_subscription(GuardState, "/g1d/guard_state", cls.on_guard, 10)
         n.create_subscription(Twist, "/nav/cmd_vel", lambda m: cls.n_cmd.__setitem__(0, cls.n_cmd[0] + 1), 50)
         cls.nav = NavClient(n)
@@ -94,13 +97,23 @@ class TestNavigation(unittest.TestCase):
         t0 = time.monotonic()
         self.blocked.clear()
         self.guard_log.clear()
+        self.odom_v.clear()
+        self.plans.clear()
         n0, g0 = self.n_cmd[0], len(self.gt)
         gid = self.nav.send(**kw)
         r = self.nav.wait(gid, timeout=150.0)
         p = self.gt_pose()
         dt = time.monotonic() - t0
         track = [[round(v, 2) for v in planar(m)] for m in self.gt[g0::100]]  # ground truth ~1 Hz
+        gt_v = [abs(m.twist.twist.linear.x) for m in self.gt[g0:]]
+        mean = lambda xs: round(sum(xs) / len(xs), 3) if xs else None  # noqa: E731
+        plan = []
+        if self.plans:
+            ps = self.plans[0].poses
+            plan = [[round(q.pose.position.x, 2), round(q.pose.position.y, 2)] for q in ps[::max(1, len(ps) // 15)]]
         self.report[name] = {"result": r, "gt_final": [round(v, 3) for v in p],
+                             "odom_v": mean([abs(v) for v in self.odom_v]), "gt_v": mean(gt_v),
+                             "n_plans": len(self.plans), "first_plan": plan,
                              "time_s": round(dt, 1), "min_gap_m": round(self.gap[0], 3),
                              "collided": self.collided[0], "guard_blocked_10hz": dict(self.blocked),
                              "nav_cmd_hz": round((self.n_cmd[0] - n0) / max(dt, 1e-3), 1),

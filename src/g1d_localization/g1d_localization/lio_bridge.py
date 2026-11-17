@@ -52,7 +52,8 @@ class LioBridge(Node):
             max_wheel_dpos_m=float(d("max_wheel_dpos_m", 0.3).value),
             max_wheel_dyaw_rad=math.radians(float(d("max_wheel_dyaw_deg", 10.0).value)))
         self.st = BridgeState(health=LioHealth(hp),
-                              max_extrapolation_s=float(d("max_extrapolation_s", 0.5).value))
+                              max_extrapolation_s=float(d("max_extrapolation_s", 0.5).value),
+                              reanchor_gap_s=float(d("reanchor_gap_s", 1.0).value))
         self.twist = None
         self.tf_missing = False
         self.tf = Buffer()
@@ -99,6 +100,10 @@ class LioBridge(Node):
         self.st.on_lio(stamp_sec(m.header.stamp), t_lio_imu, t_base_imu)
         if not anchored:
             self.get_logger().info("odom anchored at the first LIO pose")
+            self.publish_anchor(m.header.stamp, m.header.frame_id)
+        elif self.st.reanchored:
+            self.get_logger().warn(f"LIO gap > {self.st.reanchor_gap_s:.1f} s (FAST_LIO restarted?): odom "
+                                   f"re-anchored with the wheel motion (#{self.st.reanchors})")
             self.publish_anchor(m.header.stamp, m.header.frame_id)
 
     def publish_anchor(self, stamp, lio_frame: str) -> None:

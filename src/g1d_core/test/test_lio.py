@@ -81,6 +81,28 @@ def test_bridge_extrapolates_with_wheel_and_times_out():
     assert st.pose_at(1.6) is None
 
 
+def test_bridge_reanchors_after_lio_restart():
+    """FAST_LIO restarts (new world frame at the current IMU pose) after the base drove 1 m on wheels."""
+    st = BridgeState()
+    for i in range(101):
+        st.wheel.add(i * 0.05, (0.2 * i * 0.05, 0.0, 0.0))             # 0.2 m/s along x for 5 s
+    lio_T_odom = inv(T_BASE_IMU)
+    st.on_lio(0.0, lio_T_odom @ T_BASE_IMU, T_BASE_IMU)
+    st.on_lio(0.1, lio_T_odom @ tf([0.02, 0, 0], [0, 0, 0]) @ T_BASE_IMU, T_BASE_IMU)
+    assert st.reanchors == 0
+    # crash at 0.1 s, new process publishes from 5.0 s on; its world frame is the IMU at 5.0 s
+    new_world = tf([0.0, 0.0, 0.0], [0.1, -0.05, 0.7])                  # arbitrary (not gravity aligned)
+    t_imu_5 = tf([1.0, 0, 0], [0, 0, 0]) @ T_BASE_IMU                    # IMU pose in odom at 5.0 s
+    lio_T_odom2 = new_world @ inv(t_imu_5)
+    s = st.on_lio(5.0, lio_T_odom2 @ t_imu_5, T_BASE_IMU)
+    assert st.reanchored and st.reanchors == 1
+    assert s.pose == pytest.approx((1.0, 0.0, 0.0), abs=1e-6)
+    s = st.on_lio(5.1, lio_T_odom2 @ tf([1.0, 0.1, 0], [0, 0, 0.2]) @ T_BASE_IMU, T_BASE_IMU)
+    assert not st.reanchored
+    assert s.pose == pytest.approx((1.0, 0.1, 0.2), abs=1e-6)
+    assert "jump" not in st.health.status(5.1)[1]
+
+
 def test_health_jump_drift_timeout_and_wheel_consistency():
     h = LioHealth(HealthParams())
     w = WheelOdomBuffer()

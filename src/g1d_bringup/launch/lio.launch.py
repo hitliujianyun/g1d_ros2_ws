@@ -3,6 +3,7 @@
     ros2 launch g1d_bringup lio.launch.py lidar_source:=livox host_ip:=192.168.123.222 [lidar_ip:=...]
     ros2 launch g1d_bringup lio.launch.py lidar_source:=unitree       # /utlidar/* (Unitree service owns the lidar)
     ros2 launch g1d_bringup lio.launch.py lidar_source:=sim world:=room   # with g1d_sim chassis_sim running
+    ... respawn:=false while mapping (a restarted FAST_LIO has a new world frame; the pose graph would break)
 Outputs: /livox/lidar (filtered CustomMsg), /g1d/obstacle_cloud (de-skewed scan, livox_imu frame).
 Needs the robot description (TF base_link ... livox_imu) to be running.
 """
@@ -66,10 +67,13 @@ def _nodes(context):
     nodes += [
         Node(package="g1d_lidar", executable="self_filter", name="self_filter", output="screen",
              parameters=[sf_cfg], remappings=[("input", "/livox/lidar_raw"), ("output", "/livox/lidar")]),
+        # FAST_LIO_ROS2 occasionally segfaults at start-up under load (upstream issue #51); a restarted
+        # process has a new world frame, which lio_bridge re-anchors (not usable while mapping).
         Node(package="fast_lio", executable="fastlio_mapping", name="fast_lio", output="screen",
              parameters=[fast_lio_cfg, {"common.imu_topic": imu_topic,
                                         "point_filter_num": int(arg("point_filter_num"))}],
-             remappings=[("/cloud_registered_body", "/g1d/obstacle_cloud")]),
+             remappings=[("/cloud_registered_body", "/g1d/obstacle_cloud")],
+             respawn=arg("respawn") == "true", respawn_delay=1.0),
         Node(package="g1d_localization", executable="lio_bridge", name="lio_bridge", output="screen"),
     ]
     return nodes
@@ -84,6 +88,8 @@ def generate_launch_description():
         DeclareLaunchArgument("utlidar_imu_topic", default_value="/utlidar/imu_livox_mid360"),
         DeclareLaunchArgument("self_filter_config", default_value=""),
         DeclareLaunchArgument("point_filter_num", default_value="1"),
+        DeclareLaunchArgument("respawn", default_value="true",
+                              description="restart FAST_LIO if it dies (set false while mapping)"),
         DeclareLaunchArgument("world", default_value="room", description="sim world name or yaml path"),
         DeclareLaunchArgument("sim_points_per_second", default_value="100000"),
         OpaqueFunction(function=_nodes),

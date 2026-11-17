@@ -10,7 +10,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -52,7 +52,10 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(os.path.join(launch_dir, "lio.launch.py")),
             condition=IfCondition(lio),
             launch_arguments={"lidar_source": "sim", "world": LaunchConfiguration("world"),
-                              "point_filter_num": LaunchConfiguration("point_filter_num")}.items()),
+                              "point_filter_num": LaunchConfiguration("point_filter_num"),
+                              "respawn": PythonExpression(
+                                  ["'false' if '", LaunchConfiguration("mapping"), "' == 'true' else 'true'"])
+                              }.items()),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(launch_dir, "mapping.launch.py")),
             condition=IfCondition(LaunchConfiguration("mapping")),
