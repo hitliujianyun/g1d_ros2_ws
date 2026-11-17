@@ -1,0 +1,47 @@
+name: nav-exp
+
+on:
+  push:
+    branches: ["exp/**"]
+
+jobs:
+  nav:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [mppi_base, mppi_regen, mppi_nofp]
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    env:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      ROS_DOMAIN_ID: "42"
+      PYTHONUNBUFFERED: "1"
+      G1D_TEST_REPORT_DIR: ${{ github.workspace }}/test_reports
+      G1D_NAV2_OVERLAY: ${{ github.workspace }}/experiments/nav/${{ matrix.variant }}.yaml
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: git for checkout
+        run: apt-get update && apt-get install -y --no-install-recommends git
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: dependencies
+        run: scripts/ci/install_deps.sh
+      - name: build
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --packages-up-to g1d_tests --event-handlers console_cohesion+
+      - name: test
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          colcon test --packages-select g1d_tests --event-handlers console_cohesion+ \
+            --pytest-args -q -k navigation
+          colcon test-result --verbose
+      - name: measured values
+        if: always()
+        run: |
+          for f in test_reports/*.json; do [ -f "$f" ] && echo "$f: $(cat "$f")"; done

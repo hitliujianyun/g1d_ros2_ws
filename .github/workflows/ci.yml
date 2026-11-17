@@ -2,6 +2,7 @@ name: ci
 
 on:
   push:
+    branches-ignore: ["exp/**"]
   pull_request:
   workflow_dispatch:
 
