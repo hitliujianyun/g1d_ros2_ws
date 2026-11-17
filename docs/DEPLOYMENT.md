@@ -144,7 +144,9 @@ prompt += prompt_feedback(r)                                # 失败原因 + 可
 | `src/g1d_bringup/config/fast_lio.yaml` | FAST_LIO |
 | `src/g1d_bringup/config/self_filter.yaml` | 自身点盒子 |
 | `src/g1d_bringup/config/pgo.yaml` | 闭环：关键帧间隔、闭环搜索半径 / 时间 / ICP 阈值 |
-| `src/g1d_bringup/config/nav2.yaml` | Nav2：代价地图（体素高度带 0.08–1.85 m、膨胀 0.55 m）、MPPI（`vx_max 0.40`）、NavFn、行为、`nav_manager` |
+| `src/g1d_bringup/config/nav2.yaml` | Nav2：代价地图（体素高度带 0.08–1.85 m、膨胀 0.55 m）、RPP 控制器（0.35 m/s）、NavFn、行为、`nav_manager`（目标外移半径 `goal_search_radius` 1.0 m） |
+| `src/g1d_bringup/config/nav2_mppi.yaml` | MPPI 控制器（`controller:=mppi` 时替换 RPP）；`regenerate_noises` 必须为 `true` |
+| 任意 YAML（`overlay:=` 或环境变量 `G1D_NAV2_OVERLAY`） | 调参覆盖：深度合并到 Nav2 参数上（值为 `null` 表示删除该键），不用改仓库里的文件 |
 | `src/g1d_web/config/web.yaml` | Web 端口与显示 |
 
 修改 `install/` 外的源文件后需要 `colcon build` 才生效（或用 `--symlink-install` 构建）。守护参数可在 Web「参数」页热更新并写回 `guard.yaml`。
@@ -163,6 +165,8 @@ prompt += prompt_feedback(r)                                # 失败原因 + 可
 | `/joint_states` 不发布（"stale lift, lowstate …"） | 宇树话题未到；老款腰部没有 `/waistpitchstate` → `require_waist_pitch: false` |
 | 导航立即失败 `body_not_locked` | 手臂 / 腰 / 升降不在导航姿态；`/g1d/body_lock` 的 `reasons` 指出哪一项 |
 | `localization_lost` | 先验地图与现场差异大或初值错：Web「自动重定位」/ RViz 2D Pose Estimate |
-| 目标被拒 `goal_in_obstacle` / `goal_out_of_range` | 目标在障碍内且 0.5 m 内无可达点 / 超出全局代价地图 |
+| 目标被拒 `goal_in_obstacle` / `goal_out_of_range` | 目标在障碍内且 1.0 m 内无可达点（`goal_search_radius`）/ 超出全局代价地图 |
+| 日志 "LIO gap … odom re-anchored" | FAST_LIO 崩溃后被自动重启（上游偶发启动段错误），odom 用车轮里程计续接；建图时不自动重启（`respawn:=false`），需重新建图 |
+| 导航很慢、走走停停 | MPPI 时检查 `regenerate_noises: true`、控制周期 = `model_dt`；两种控制器都检查守护是否在减速区（`/g1d/guard_state` 的 `front_clear` < 1.2 m） |
 | 机器人在桌下停住 / 绕不过桌沿 | 体素层高度带（0.08–1.85 m）与膨胀半径；Web 中查看代价地图 |
 | `nav2_unavailable` | Nav2 生命周期未激活：查看 `lifecycle_manager_navigation` 日志 |

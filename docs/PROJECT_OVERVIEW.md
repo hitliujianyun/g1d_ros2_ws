@@ -6,7 +6,7 @@
 
 1. **建图**：FAST_LIO 激光惯性里程计 + 关键帧位姿图闭环（GTSAM），保存三维点云地图与高度带 2D 栅格（能表示悬空障碍）；
 2. **定位**：先验地图上 small_gicp 持续重定位（`map → odom`），初始位姿可由 RViz / Web 给定、自动全局搜索或使用上次位姿；也支持无地图的纯里程计模式；
-3. **导航避障**：Nav2（NavFn + RotationShim/MPPI），代价地图含三维体素层、底盘雷达层与膨胀；目标在障碍内自动外移，失败给出原因与可通行方向；
+3. **导航避障**：Nav2（NavFn + Regulated Pure Pursuit；MPPI 保留为可选项），代价地图含三维体素层、底盘雷达层与膨胀；目标在障碍内自动外移（优先机器人一侧），失败给出原因与可通行方向；
 4. **安全**：独立守护 `g1d_guard` 是 `/cmd_vel_no_limit` 唯一写入者（限幅、加减速、看门狗、扫掠路径反射停车、急停锁存、遥控接管）；
 5. **NavGPT 接入**：相对航点 + 图像时刻 `stamp`，用 TF 历史补偿推理延迟；
 6. **可视化与工具**：RViz2 / Foxglove 配置、浏览器调试台、接口探测、底盘指令实测、外参标定、rosbag2 预设、验收 T1–T7 与建图 / 重定位指标。
@@ -89,14 +89,16 @@ AGV_link ─→ Lidar_Link ─→ chassis_laser
 ## 7. 导航
 
 - 代价地图：体素层（Mid-360S 去畸变点云，原点 = `livox_imu`，0.08–1.88 m 共 15 层，三维射线清除——只清除射线真正穿过的高度，桌面不会被地面方向的射线清除）、障碍层（底盘雷达）、膨胀 0.55 m；全局地图在 map 模式下加静态层。
-- 规划 NavFn（1 Hz 重规划），控制 RotationShim + MPPI（DiffDrive，56 步 × 0.05 s，`vx_max 0.40`，critics 与 g1d_ws 相同），进展检查 8 s / 0.2 m，恢复 spin / backup / wait。
-- `nav_manager`：模式 navigate / rotate（Spin）/ simple（Spin + DriveOnHeading）/ stop；坐标系 base_at_stamp（TF 历史 15 s，超过 5 s 拒绝）/ base / odom / map；目标处理（9 m 截断 `partial`、障碍内沿目标→机器人回退或 0.5 m 内搜索 `adjusted`、地图外 `goal_out_of_range`）；运行中检查姿态锁定、LIO、定位、守护急停 / 人工接管、超时；Nav2 错误码映射为 `no_path` / `blocked` / `goal_in_obstacle` 等；失败附 7 个方向的 free_sectors；新目标抢占旧目标时不停车。
+- 规划 NavFn（1 Hz 重规划），控制 Regulated Pure Pursuit（0.35 m/s，前视 0.3–0.9 m，夹角 > 45° 先原地转向，曲率 / 碰撞前瞻降速），进展检查 8 s / 0.2 m，恢复 spin / backup / wait。
+- MPPI（RotationShim + MPPI，参数沿用 g1d_ws）在 `config/nav2_mppi.yaml`，`controller:=mppi` 启用。沿用的 `regenerate_noises: false` 会让整个运行期复用一组噪声样本，CI 仿真中表现为持续偏转、平均约 0.05 m/s、不跟随路径；改为 `true` 后导航用例全部通过（绕箱 26.9 s，RPP 19.9 s）。对照实验同时排除了 CPU、控制频率、里程计速度、RotationShim、路径分辨率、路径类 critics 和 footprint 碰撞检查。
+- 默认控制器为 RPP（CI 两轮验证）；MPPI 修正后只验证过一轮，上机时两者都可以试，以真机验收为准。
+- `nav_manager`：模式 navigate / rotate（Spin）/ simple（Spin + DriveOnHeading）/ stop；坐标系 base_at_stamp（TF 历史 15 s，超过 5 s 拒绝）/ base / odom / map；目标处理（9 m 截断 `partial`、障碍内先沿目标→机器人回退，再在 1.0 m 内找"离目标近且偏向机器人一侧"的可行点 `adjusted`、地图外 `goal_out_of_range`）；运行中检查姿态锁定、LIO、定位、守护急停 / 人工接管、超时；Nav2 错误码映射为 `no_path` / `blocked` / `goal_in_obstacle` 等；失败附 7 个方向的 free_sectors；新目标抢占旧目标时不停车。
 
 ## 8. 安全
 
 | 层 | 机制 | 兜底 |
 |---|---|---|
-| L1 | 代价地图 + MPPI | L2 |
+| L1 | 代价地图 + 控制器（RPP 碰撞前瞻） | L2 |
 | L2 | 守护反射层：整车矩形沿指令圆弧扫掠，0.45 m 停车 / 1.2 m 减速（爬行下限 0.05 m/s）、后退保护、旋转圆 0.38 m | L3 |
 | L3 | 守护看门狗：导航指令 0.25 s、传感器 0.5 s 超时；减速度 1.5 m/s² | L4 |
 | L4 | 急停锁存：`/g1d/estop`、底盘碰撞 / 悬崖事件（只认启动后新事件）、Web 急停 | L5 |
@@ -116,8 +118,8 @@ AGV_link ─→ Lidar_Link ─→ chassis_laser
 | 急停、遥控器接管、TF 链、时间戳重打、姿态锁定 | 通过 |
 | LIO 约 8 m 方形闭环 | 位置误差 0.077–0.088 m、航向 0.02–0.07°（要求 < 0.10 m / 2°）；自身点漏检 0 |
 | 建图保存 | 约 10 万点、46–48 关键帧；点到真实表面距离中位数 3–4 cm、P90 9 cm；栅格占据精度 0.89–0.996 |
-| 重定位 | 自动初始化误差 0.01–0.05 m；错误初值（0.4 m / 15°）3–8 s 内重新收敛到 < 0.02 m |
-| 导航 | 绕障、目标在障碍内外移、桌面悬空、延迟补偿、不可达失败原因（见 CI 产物 `navigation.json`） |
+| 重定位 | 自动初始化误差 0.01–0.05 m；行驶中跟踪最大误差 0.01–0.04 m；错误初值（0.4 m / 15°）3–8 s 内重新收敛到 < 0.02 m |
+| 导航（RPP） | 绕箱到 6 m 外 19.9 s；目标在箱内 → 外移到机器人一侧；转 90° 后按旧图像时间戳的目标仍到达正确位置（延迟补偿）；桌前到达、桌下目标拒绝（`goal_in_obstacle`）；不可达目标返回原因与 7 个方向的 free_sectors；全程无碰撞，离障碍最近 0.35 m |
 
 仿真不等于真机：雷达点云、IMU、底盘动力学都是理想化模型，最终以真机验收 T1–T7 为准。
 

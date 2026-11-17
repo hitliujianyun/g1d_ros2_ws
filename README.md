@@ -5,7 +5,7 @@
 - 头部 Livox Mid-360S（倒装）+ FAST_LIO 激光惯性里程计，关节反馈驱动的 TF（升降 / 腰部运动）；
 - 建图：关键帧位姿图闭环（GTSAM），保存三维点云地图与高度带 2D 栅格（桌沿等悬空障碍可见）；
 - 定位：先验地图上 small_gicp 持续重定位（RViz / Web 给初值、自动全局搜索或上次位姿），或无地图纯里程计；
-- 导航：Nav2（NavFn + RotationShim/MPPI），体素 + 底盘雷达代价地图，目标自动外移与明确的失败原因；
+- 导航：Nav2（NavFn + Regulated Pure Pursuit，MPPI 可选 `controller:=mppi`），体素 + 底盘雷达代价地图，目标自动外移与明确的失败原因；
 - 安全：独立守护 `g1d_guard` 是底盘指令 `/cmd_vel_no_limit` 的唯一写入者（限幅、看门狗、反射停车、急停、遥控接管）；
 - NavGPT：相对航点 + 图像时刻，延迟补偿，失败返回原因与可通行方向；
 - 工具：RViz2 / Foxglove、浏览器调试台、接口探测、底盘指令实测、外参标定、rosbag2 预设、验收 T1–T7。

@@ -189,6 +189,7 @@ IMU 加速度单位为 g（FAST_LIO 按 g 处理）。
 
 - 全局规划：NavFn（`allow_unknown true`、`tolerance 0.3`），1 Hz 重规划（BT）。
 - 局部控制：MPPI（参数沿用 Notes 第 7 节，换成 Jazzy 参数名），外包 RotationShimController（起步转向、到达后朝向对齐）。到达容差 0.2 m / 0.25 rad。
+  - **M6 修订**：CI 闭环中沿用的 MPPI 参数平均速度约 0.05 m/s 且不跟随全局路径。对照实验（RotationShim、路径分辨率、路径类 critics、footprint 检查、CPU、控制频率均无改善；里程计速度核对正确）最终定位到 `regenerate_noises: false`：整个运行期复用一组噪声样本，小批量（400）下样本均值偏差变成系统性偏转。改为 `true` 后用例全部通过。同一链路换 Regulated Pure Pursuit 也全部通过且更快，默认控制器改为 RPP（0.35 m/s，夹角 > 45° 先原地转向），MPPI 保留为 `controller:=mppi`（`config/nav2_mppi.yaml`），待用户确认 / 真机验收后决定默认值。
 - 进展检查：8 s 内 < 0.2 m → 恢复（wait → clear → 小角度原地转）；恢复用尽 → 失败。
 - 控制器输出 remap 到 `/nav/cmd_vel`；不启用 Nav2 `collision_monitor` / `velocity_smoother`（守护负责）。
 

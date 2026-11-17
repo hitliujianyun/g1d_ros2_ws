@@ -8,7 +8,7 @@
 | 项 | 内容 |
 |---|---|
 | 运行平台 | 外接 Ubuntu 24.04 + RTX 5090 开发机，ROS 2 Jazzy（rmw_cyclonedds），经网线 / WiFi 与 PC2 用 DDS 域 0 通信 |
-| 核心组件 | livox_ros_driver2 → 自身点过滤 → FAST_LIO → lio_bridge；GTSAM 闭环建图；small_gicp 重定位；Nav2（NavFn + MPPI）；rclpy 守护 |
+| 核心组件 | livox_ros_driver2 → 自身点过滤 → FAST_LIO → lio_bridge；GTSAM 闭环建图；small_gicp 重定位；Nav2（NavFn + RPP，MPPI 可选）；rclpy 守护 |
 | 本机验证 | Windows pytest（`g1d_core`）+ GitHub Actions（`ros:jazzy` 构建、单测、闭环仿真集成测试） |
 | 仓库 | `github.com/hitliujianyun/g1d_ros2_ws`（公开） |
 
@@ -54,9 +54,11 @@
 - [x] 修复：启动自动搜索并发执行；small_gicp 用最新 TF 处理延迟的 `/initialpose`（vendor 补丁）
 
 ### M6 导航
-- [x] Nav2 参数（体素 / 底盘雷达 / 膨胀代价地图、NavFn、RotationShim + MPPI、行为、BT），`navigation.launch.py`（map | odom，`profile:=sim` 轻量 MPPI）
+- [x] Nav2 参数（体素 / 底盘雷达 / 膨胀代价地图、NavFn、RPP 控制器（默认）/ RotationShim + MPPI（`controller:=mppi`）、行为、BT），`navigation.launch.py`（map | odom，`profile:=sim`，`overlay:=` 调参覆盖）
 - [x] `g1d_nav_manager`（NavigateRelative：navigate / rotate / simple / stop；base_at_stamp 延迟补偿；目标截断 / 外移 / 拒绝；Nav2 错误码 → reason；free_sectors；JSON 兼容层；`NavClient` + `prompt_feedback`）
-- [ ] CI：绕障、目标在障碍内、延迟补偿、桌面悬空、不可达（调试中：CI 机器上控制频率不足 → sim 轻量配置）
+- [x] CI：绕障、目标在障碍内（外移到机器人一侧）、延迟补偿、桌面悬空、不可达（RPP 两轮通过；MPPI 修正 `regenerate_noises` 后一轮通过）
+- [x] FAST_LIO 偶发启动段错误（上游 FAST_LIO_ROS2 #51）：自动重启 + `lio_bridge` 断档后用车轮里程计重新锚定 odom
+- [ ] 默认控制器 RPP / MPPI 待用户确认
 
 ### M7 可视化与工具
 - [x] RViz2 配置、Foxglove 布局、`viz.launch.py`、`record.launch.py`（mapping / nav / debug，MCAP）
@@ -82,7 +84,9 @@
 
 | 2026-11-17 | M5 CI：自动初始化、跟踪、重新收敛通过。M6：Nav2 + nav_manager；首轮 BT 插件名写法错误（Jazzy 用 `::`）；第二轮 CI 上机器人几乎不动（4 核 CI 被 LIO 仿真 + MPPI 占满）→ 仿真轻量 MPPI 配置。M7 工具、M8 Web、M9 文档完成 |
 
-**与设计文档的差异（均已在设计文档 / UPSTREAM.md 中注明）**：时钟映射补丁取消（驱动已用主机时钟）；KISS-Matcher 改为以建图轨迹为种子的全局搜索（依赖更轻、可单测）；守护 `vx_max` 0.40、减速度保持 1.5 m/s²（防前倾）、`cmd_timeout` 0.25 s；目标外移搜索半径 1.0 m；Mid-360 IMU 外参符号修正。
+| 2026-11-17 | M6 收尾，CI 全绿（Jazzy 122 项）。导航调试：MPPI 的 `model_dt` 必须 ≥ 控制周期；定位状态时间戳改用其 TF 时间（跟踪误差 0.205 → 0.011 m）；取消 Nav2 目标后等其结束再报告（否则下个目标立即失败）。MPPI 只有约 0.05 m/s 且偏转：用并行对照实验（`exp/nav-tuning` 分支 + `overlay` 参数）逐个排除 CPU / 频率 / 里程计 / RotationShim / 路径分辨率 / critics / footprint，最终定位到 `regenerate_noises: false`；同一链路 RPP 全部通过，默认改为 RPP。另发现 FAST_LIO 偶发启动段错误 → 自动重启 + odom 重新锚定。目标外移改为优先机器人一侧。导航实测见 docs/PROJECT_OVERVIEW.md 第 9 节 |
+
+**与设计文档的差异（均已在设计文档 / UPSTREAM.md 中注明）**：时钟映射补丁取消（驱动已用主机时钟）；KISS-Matcher 改为以建图轨迹为种子的全局搜索（依赖更轻、可单测）；守护 `vx_max` 0.40、减速度保持 1.5 m/s²（防前倾）、`cmd_timeout` 0.25 s；目标外移搜索半径 1.0 m；Mid-360 IMU 外参符号修正；默认局部控制器 RPP（MPPI 可选，`regenerate_noises: true`）；FAST_LIO 崩溃自动重启（建图时除外）。
 
 ## 4. 上机待办（本机无法完成）
 

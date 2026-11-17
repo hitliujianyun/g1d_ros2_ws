@@ -1,6 +1,6 @@
 # MPPI（RotationShim + MPPIController）控制器配置。navigation.launch.py controller:=mppi 时，
-# 用它整块替换 nav2.yaml 的 controller_server.FollowPath。数值沿用 g1d_ws 仿真调过的值。
-# 注意：CI 仿真中该配置平均速度只有约 0.05 m/s 且不跟随路径（见 PLAN.md 进度记录），上机须重新调参验证。
+# 用它整块替换 nav2.yaml 的 controller_server.FollowPath。数值沿用 g1d_ws 仿真调过的值，
+# 只有 regenerate_noises 改为 true（见该行注释）。
 controller_server:
   ros__parameters:
     FollowPath:
@@ -33,7 +33,7 @@ controller_server:
       motion_model: "DiffDrive"
       prune_distance: 1.7
       transform_tolerance: 0.2
-      regenerate_noises: false
+      regenerate_noises: true          # false 时整个运行期复用一组噪声样本：CI 仿真中带来系统性偏转、约 0.05 m/s
       visualize: false
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
                 "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
