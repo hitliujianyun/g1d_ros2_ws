@@ -1,8 +1,8 @@
-"""Pure base-guard logic (no DDS), design doc §6.8.
+"""Pure base-guard logic (no ROS / DDS); migrated from g1d_ws@068e6dd guard_core.py.
 
 Every control period: select the nav command (or zero), clamp it, check sensor freshness, apply
 the reflex layer (swept-path clearance ahead / behind, rotation circle), the e-stop latch and the
-manual-override hold, rate-limit, and decide whether rt/cmd_vel_no_limit is written at all
+manual-override hold, rate-limit, and decide whether /cmd_vel_no_limit is written at all
 (the chassis is released once the zero command has been held for `zero_hold`).
 
 The swept-path check follows the idea of LidarGuard.path_min in unitree_robotskills
@@ -55,16 +55,21 @@ class GuardParams:
     teleop_wz_max: float = 0.50
 
     @classmethod
-    def from_config(cls, cfg: Dict[str, Any]) -> "GuardParams":
-        g = (cfg or {}).get("guard", {}) or {}
+    def from_dict(cls, d: Optional[Dict[str, Any]]) -> "GuardParams":
+        """Known keys of `d` override the defaults; unknown keys are ignored."""
         p = cls()
         for f in fields(cls):
-            if f.name in g:
-                setattr(p, f.name, type(getattr(p, f.name))(g[f.name]))
+            if d and f.name in d:
+                default = getattr(p, f.name)
+                value = d[f.name]
+                if isinstance(default, bool):
+                    value = value.strip().lower() in ("1", "true", "yes", "on") \
+                        if isinstance(value, str) else bool(value)
+                setattr(p, f.name, type(default)(value))
         return p
 
 
-# Parameters that may change at runtime (rt/nav/param_set) with their allowed ranges.
+# Parameters that may change at runtime with their allowed ranges.
 TUNABLE = {
     "vx_max": (0.0, 1.0), "vx_min": (-0.3, 0.0), "wz_max": (0.0, 1.5),
     "acc_v": (0.05, 3.0), "brake_v": (0.1, 5.0), "acc_w": (0.05, 5.0),
@@ -197,7 +202,7 @@ class GuardCore:
             self.manual_until = now + self.p.manual_hold_s
 
     def on_teleop(self, v: float, w: float, now: float) -> None:
-        """Web teleop (rt/nav/teleop_cmd): overrides nav while fresh, same limits and reflexes."""
+        """Web / pad teleop (/g1d/teleop_cmd): overrides nav while fresh, same limits and reflexes."""
         self.teleop = (float(v), float(w))
         self.t_teleop = now
 
@@ -334,7 +339,7 @@ class GuardCore:
             "v_target": round(self.last_target[0], 4), "w_target": round(self.last_target[1], 4),
             "blocked": self.blocked,
             "estop": self.estop, "estop_reason": self.estop_reason,
-            # g1d_nav cancels its goal while "manual" is true (remote stick or web teleop).
+            # g1d_nav_manager cancels its goal while "manual" is true (remote stick or web teleop).
             "manual": self.manual(now) or self.teleop_active(now),
             "manual_source": ("remote" if self.manual(now) else
                               "web" if self.teleop_active(now) else ""),

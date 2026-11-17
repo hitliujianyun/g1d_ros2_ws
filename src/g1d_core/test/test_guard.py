@@ -3,8 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from g1d_nav_py.config import load_config
-from g1d_nav_py.guard_core import GuardCore, GuardParams, scan_to_points, swept_clearance
+from g1d_core.guard import GuardCore, GuardParams, scan_to_points, swept_clearance
 
 DT = 1.0 / 30.0
 
@@ -34,11 +33,28 @@ def run(g, t0, t1, cmd=None, refresh=True):
     return outs
 
 
-def test_params_from_project_config():
-    p = GuardParams.from_config(load_config())
-    assert p.stop_m == pytest.approx(0.45)
+def test_params_from_dict():
+    p = GuardParams.from_dict({"stop_m": 0.5, "require_cloud": "false", "rate_hz": 20, "bogus": 1})
+    assert p.stop_m == pytest.approx(0.5)
     assert p.vx_max == pytest.approx(0.50)
-    assert p.require_cloud is True
+    assert p.require_cloud is False
+    assert p.rate_hz == pytest.approx(20.0)
+    assert GuardParams.from_dict(None).require_cloud is True
+
+
+def test_deploy_params_zero_command_within_half_second():
+    """Deployment overrides (cmd_timeout 0.25, brake_v 2.0): at 0.5 m/s the output reaches 0
+    within 0.5 s after the last nav command, leaving margin for the 0.6 s stop requirement."""
+    p = GuardParams(cmd_timeout=0.25, brake_v=2.0)
+    g = fed(p)
+    run(g, 0.0, 2.0, cmd=(0.5, 0.0))
+    t_last = 2.0 - DT
+    outs = run(g, 2.0, 3.0)
+    t = 2.0 + DT * np.arange(len(outs))
+    v = np.array([o.v for o in outs])
+    assert v[0] == pytest.approx(0.5)
+    t_zero = t[np.argmax(v == 0.0)]
+    assert t_zero - t_last <= 0.5 + 2 * DT
 
 
 def test_straight_clearance_is_exact():
