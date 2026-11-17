@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WiFi link (multicast unreliable): unicast discovery with PC2 as a static peer.
+     g1d_env.sh replaces G1D_NET_IF and G1D_PEER (default 192.168.123.164).
+     PC2's Unitree services keep their own configuration; they reply to our unicast SPDP. -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <General>
+      <Interfaces>
+        <NetworkInterface name="G1D_NET_IF" priority="default" multicast="false"/>
+      </Interfaces>
+      <AllowMulticast>spdp</AllowMulticast>
+    </General>
+    <Discovery>
+      <Peers>
+        <Peer address="G1D_PEER"/>
+      </Peers>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>50</MaxAutoParticipantIndex>
+    </Discovery>
+  </Domain>
+</CycloneDDS>
