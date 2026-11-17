@@ -1,0 +1,11 @@
+# 上游开源代码清单：name  url  ref（- 表示默认分支）
+# scripts/clone_upstream.py 克隆到 _upstream/<name>（不入库）。
+# 未修改的以 git submodule 放在 src/external/；要修改的先原样提交到 src/vendor/<name> 再打补丁。
+unitree_ros2               https://github.com/unitreerobotics/unitree_ros2.git                         -
+livox_ros_driver2          https://github.com/Livox-SDK/livox_ros_driver2.git                          -
+Livox-SDK2                 https://github.com/Livox-SDK/Livox-SDK2.git                                 -
+FAST_LIO                   https://github.com/hku-mars/FAST_LIO.git                                    ROS2
+small_gicp                 https://github.com/koide3/small_gicp.git                                    -
+small_gicp_relocalization  https://github.com/SMBU-PolarBear-Robotics-Team/small_gicp_relocalization.git  -
+KISS-Matcher               https://github.com/MIT-SPARK/KISS-Matcher.git                               -
+FASTLIO2_ROS2              https://github.com/liangheming/FASTLIO2_ROS2.git                            -
