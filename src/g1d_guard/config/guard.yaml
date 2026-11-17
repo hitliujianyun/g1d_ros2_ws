@@ -1,0 +1,36 @@
+# g1d_guard 参数。数值沿用 g1d_ws（真机仿真调过）；标【待实测】的要在第 0 阶段按 cmd_vel_probe 结果调整。
+g1d_guard:
+  ros__parameters:
+    rate_hz: 30.0
+    vx_max: 0.50
+    vx_min: -0.10
+    wz_max: 0.60
+    acc_v: 0.5
+    brake_v: 2.0            # 0.5 m/s -> 0 用 0.25 s（与 cmd_timeout 合计 0.5 s，满足 0.6 s 停车要求）
+    acc_w: 1.0
+    cmd_timeout: 0.25       # 导航指令超时
+    sensor_timeout: 0.5
+    zero_hold: 1.0          # 归零后继续发布零速的时间，之后停止发布让底盘松开【待实测】
+    front_x: 0.28
+    rear_x: 0.30
+    half_width: 0.30
+    body_x: 0.30
+    body_y: 0.28
+    rotate_radius: 0.38
+    stop_m: 0.45
+    slow_m: 1.20
+    creep_v: 0.05
+    rear_clear_m: 0.50
+    require_cloud: true     # Mid-360S 障碍点超时也停车（M3 之前的纯底盘雷达测试可设 false）
+    manual_deadzone: 0.15
+    manual_hold_s: 5.0
+    teleop_timeout: 0.3
+    teleop_vx_max: 0.30
+    teleop_wz_max: 0.50
+    base_frame: base_link
+    cloud_z_min: 0.08
+    cloud_z_max: 1.85
+    cloud_range: 3.0
+    other_writers: refuse   # /cmd_vel_no_limit 已有其他发布者时拒绝启动
+    chassis_http: http://192.168.123.163:1448
+    abort_slamware_on_start: true
