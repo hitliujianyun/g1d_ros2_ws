@@ -230,8 +230,17 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
                                  .toRotationMatrix();
 
   try {
-    auto transform =
-      tf_buffer_->lookupTransform(robot_base_frame_, current_scan_frame_id_, tf2::TimePointZero);
+    // g1d: base pose at the time the initial pose refers to (a delayed message must not be combined
+    // with the current odometry, which would offset the result by the motion in between)
+    geometry_msgs::msg::TransformStamped transform;
+    try {
+      transform = tf_buffer_->lookupTransform(
+        robot_base_frame_, current_scan_frame_id_, rclcpp::Time(msg->header.stamp),
+        rclcpp::Duration::from_seconds(0.1));
+    } catch (tf2::TransformException &) {
+      transform =
+        tf_buffer_->lookupTransform(robot_base_frame_, current_scan_frame_id_, tf2::TimePointZero);
+    }
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
