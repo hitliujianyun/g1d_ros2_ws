@@ -2,7 +2,7 @@
 g1d_guard:
   ros__parameters:
     rate_hz: 30.0
-    vx_max: 0.40            # = MPPI vx_max；停车时间 0.25 + 0.40 / 1.5 = 0.52 s < 0.6 s
+    vx_max: 0.40            # RPP desired_linear_vel 0.35 / MPPI vx_max 0.40；停车时间 0.25 + 0.40 / 1.5 = 0.52 s < 0.6 s
     vx_min: -0.10
     wz_max: 0.60
     acc_v: 0.5

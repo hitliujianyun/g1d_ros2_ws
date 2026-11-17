@@ -1,5 +1,5 @@
 """Navigation closed loop (sim.launch.py lio:=true nav:=true, world room, odom mode):
-NavGPT-style goals through g1d_nav_manager -> Nav2 (NavFn + RotationShim/MPPI) -> guard -> sim chassis.
+NavGPT-style goals through g1d_nav_manager -> Nav2 (NavFn + RPP) -> guard -> sim chassis.
 """
 import json
 import math

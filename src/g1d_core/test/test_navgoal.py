@@ -37,6 +37,18 @@ def test_goal_in_obstacle_moves_back_towards_robot():
     assert g.cost(*r.xy) < 50
 
 
+def test_goal_in_obstacle_prefers_the_robot_side():
+    """The way back towards the robot is blocked beyond the search radius (a wall behind the box):
+    the nearest free cell on the far side is as close, but the robot side is preferred."""
+    g = grid_with_box(box=(3.0, -0.4, 3.4, 0.4), res=0.1, inflate=0.5)
+    h, w = g.data.shape
+    X, Y = np.meshgrid(-1.0 + (np.arange(w) + 0.5) * 0.1, -3.0 + (np.arange(h) + 0.5) * 0.1)
+    g.data[(np.abs(Y) < 0.45) & (X > 3.4) & (X < 4.6)] = 70     # high-cost strip along the way back
+    r = sanitize_goal(g, (6.0, 0.1), (3.2, 0.0), GoalParams(search_radius=1.0))
+    assert r.ok and r.adjusted and g.cost(*r.xy) < 50
+    assert r.xy[0] > 3.4, r.xy                                    # not behind the box (x < 3.0)
+
+
 def test_goal_deep_in_obstacle_fails_and_out_of_range():
     g = grid_with_box(box=(1.0, -3.0, 9.0, 3.0))                   # huge obstacle
     r = sanitize_goal(g, (0.0, 0.0), (5.0, 0.0))

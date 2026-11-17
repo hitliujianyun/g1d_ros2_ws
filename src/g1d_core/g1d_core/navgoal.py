@@ -53,6 +53,9 @@ class GoalCheck:
     reason: str = ""
 
 
+NEAR_SIDE_WEIGHT = 0.3     # per metre of distance to the robot, against metres of goal displacement
+
+
 def _acceptable(grid: CostGrid, x: float, y: float, p: GoalParams) -> bool:
     c = grid.cost(x, y)
     if c == -2:
@@ -77,28 +80,29 @@ def sanitize_goal(grid: CostGrid, robot: Tuple[float, float], goal: Tuple[float,
         return GoalCheck(False, (gx, gy), partial, False, "goal_out_of_range")
     if _acceptable(grid, gx, gy, p):
         return GoalCheck(True, (gx, gy), partial, False, "")
-    # 1) back along goal -> robot, at most search_radius
+    # 1) back along goal -> robot, at most search_radius (+2 cells: obstacle edges are quantized)
     d = math.hypot(gx - rx, gy - ry)
     step = grid.resolution
     if d > 1e-6:
         ux, uy = (rx - gx) / d, (ry - gy) / d
-        s = step
-        while s <= min(p.search_radius, d) + 1e-9:
-            x, y = gx + ux * s, gy + uy * s
+        k = 1
+        while k * step <= min(p.search_radius + 2 * step, d) + 1e-9:
+            x, y = gx + ux * k * step, gy + uy * k * step
             if _acceptable(grid, x, y, p):
                 return GoalCheck(True, (x, y), partial, True, "")
-            s += step
-    # 2) nearest acceptable cell within search_radius
+            k += 1
+    # 2) acceptable cell within search_radius, close to the goal and on the robot's side of it
     best, best_d = None, math.inf
     n = int(math.ceil(p.search_radius / step))
     for i in range(-n, n + 1):
         for j in range(-n, n + 1):
             dd = math.hypot(i * step, j * step)
-            if dd > p.search_radius or dd >= best_d:
+            if dd > p.search_radius:
                 continue
             x, y = gx + i * step, gy + j * step
-            if _acceptable(grid, x, y, p):
-                best, best_d = (x, y), dd
+            score = dd + NEAR_SIDE_WEIGHT * math.hypot(x - rx, y - ry)
+            if score < best_d and _acceptable(grid, x, y, p):
+                best, best_d = (x, y), score
     if best is not None:
         return GoalCheck(True, best, partial, True, "")
     return GoalCheck(False, (gx, gy), partial, False, "goal_in_obstacle")

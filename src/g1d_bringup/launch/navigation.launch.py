@@ -1,7 +1,8 @@
-"""Nav2 (planner, MPPI controller, behaviors, BT navigator, waypoint follower) + g1d_nav_manager.
+"""Nav2 (planner, RPP or MPPI controller, behaviors, BT navigator, waypoint follower) + g1d_nav_manager.
 
     ros2 launch g1d_bringup navigation.launch.py global_frame:=map    # with localization mode:=map
     ros2 launch g1d_bringup navigation.launch.py global_frame:=odom   # no prior map (rolling global costmap)
+    ros2 launch g1d_bringup navigation.launch.py controller:=mppi          # default rpp
     ros2 launch g1d_bringup navigation.launch.py overlay:=my_tuning.yaml   # or env G1D_NAV2_OVERLAY
 Velocity commands go to /nav/cmd_vel; g1d_guard forwards them to /cmd_vel_no_limit.
 """
@@ -18,11 +19,14 @@ from launch_ros.actions import Node
 NAV2_NODES = ["controller_server", "planner_server", "behavior_server", "bt_navigator", "waypoint_follower"]
 
 
-def rewrite(params: dict, global_frame: str, profile: str = "robot") -> dict:
+def rewrite(params: dict, global_frame: str, profile: str = "robot", mppi: dict = None) -> dict:
+    cs = params["controller_server"]["ros__parameters"]
+    if mppi is not None:
+        cs["FollowPath"] = mppi["controller_server"]["ros__parameters"]["FollowPath"]
     if profile == "sim":                            # CI runners: 4 vCPUs shared with the LIO simulation
-        cs = params["controller_server"]["ros__parameters"]
         cs["controller_frequency"] = 10.0
-        cs["FollowPath"].update({"batch_size": 400, "time_steps": 30, "model_dt": 0.1})
+        if mppi is not None:
+            cs["FollowPath"].update({"batch_size": 400, "time_steps": 30, "model_dt": 0.1})
         params["local_costmap"]["local_costmap"]["ros__parameters"]["update_frequency"] = 5.0
     params["bt_navigator"]["ros__parameters"]["global_frame"] = global_frame
     params["behavior_server"]["ros__parameters"]["global_frame"] = global_frame
@@ -51,8 +55,14 @@ def _nodes(context):
     share = get_package_share_directory("g1d_bringup")
     arg = lambda n: LaunchConfiguration(n).perform(context)  # noqa: E731
     gf = arg("global_frame")
+    mppi = None
+    if arg("controller") == "mppi":
+        with open(os.path.join(share, "config", "nav2_mppi.yaml"), encoding="utf-8") as f:
+            mppi = yaml.safe_load(f)
+    elif arg("controller") != "rpp":
+        raise RuntimeError("controller must be rpp or mppi")
     with open(arg("params") or os.path.join(share, "config", "nav2.yaml"), encoding="utf-8") as f:
-        params = rewrite(yaml.safe_load(f), gf, arg("profile"))
+        params = rewrite(yaml.safe_load(f), gf, arg("profile"), mppi)
     if arg("overlay"):
         with open(arg("overlay"), encoding="utf-8") as f:
             params = merge(params, yaml.safe_load(f) or {})
@@ -83,8 +93,10 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("global_frame", default_value="map", description="map | odom"),
         DeclareLaunchArgument("params", default_value="", description="Nav2 params (default config/nav2.yaml)"),
+        DeclareLaunchArgument("controller", default_value="rpp",
+                              description="rpp (Regulated Pure Pursuit) | mppi (config/nav2_mppi.yaml, needs tuning)"),
         DeclareLaunchArgument("profile", default_value="robot",
-                              description="robot | sim (lighter MPPI for small CI machines)"),
+                              description="robot | sim (10 Hz control, lighter MPPI for small CI machines)"),
         DeclareLaunchArgument("overlay", default_value=EnvironmentVariable("G1D_NAV2_OVERLAY", default_value=""),
                               description="YAML deep-merged over the params after the profile (tuning)"),
         OpaqueFunction(function=_nodes),
