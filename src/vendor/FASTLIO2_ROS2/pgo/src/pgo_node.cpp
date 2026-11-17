@@ -27,6 +27,7 @@ struct NodeConfig
     std::string odom_topic = "/lio/odom";
     std::string map_frame = "map";
     std::string local_frame = "lidar";
+    bool publish_tf = true;   // g1d: optional map -> local TF
 };
 
 struct NodeState
@@ -72,6 +73,8 @@ public:
         m_node_config.odom_topic = config["odom_topic"].as<std::string>();
         m_node_config.map_frame = config["map_frame"].as<std::string>();
         m_node_config.local_frame = config["local_frame"].as<std::string>();
+        if (config["publish_tf"])
+            m_node_config.publish_tf = config["publish_tf"].as<bool>();
 
         m_pgo_config.key_pose_delta_deg = config["key_pose_delta_deg"].as<double>();
         m_pgo_config.key_pose_delta_trans = config["key_pose_delta_trans"].as<double>();
@@ -108,6 +111,8 @@ public:
 
     void sendBroadCastTF(builtin_interfaces::msg::Time &time)
     {
+        if (!m_node_config.publish_tf)
+            return;
         geometry_msgs::msg::TransformStamped transformStamped;
         transformStamped.header.frame_id = m_node_config.map_frame;
         transformStamped.child_frame_id = m_node_config.local_frame;
