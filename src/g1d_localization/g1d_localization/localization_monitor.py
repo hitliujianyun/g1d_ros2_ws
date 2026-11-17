@@ -73,6 +73,7 @@ class LocalizationMonitor(Node):
             self.create_timer(self.save_every, self.save_last_pose, callback_group=self.cb)
         self._startup_done = self.mode != "map" or self.startup_init == "none"
         self._startup_tries = 0
+        self._startup_lock = threading.Lock()
         if not self._startup_done:
             self.create_timer(1.0, self.try_startup_init, callback_group=self.cb)
 
@@ -180,6 +181,15 @@ class LocalizationMonitor(Node):
         return float(p["x"]), float(p["y"]), float(p["yaw"])
 
     def try_startup_init(self) -> None:
+        # the reentrant timer may fire again while a (slow) search runs: one attempt at a time
+        if not self._startup_lock.acquire(blocking=False):
+            return
+        try:
+            self._try_startup_init()
+        finally:
+            self._startup_lock.release()
+
+    def _try_startup_init(self) -> None:
         if self._startup_done or self.lookup(self.odom_frame, self.base_frame) is None:
             return
         if self.startup_init == "last":
