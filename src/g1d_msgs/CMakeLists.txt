@@ -8,6 +8,7 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GuardState.msg"
   "msg/BodyLock.msg"
+  "msg/LioHealth.msg"
   DEPENDENCIES std_msgs
 )
 
