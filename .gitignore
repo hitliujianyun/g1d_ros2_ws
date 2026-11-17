@@ -1,0 +1,27 @@
+# colcon
+/build/
+/install/
+/log/
+
+# 本地上游克隆（不入库）
+/_upstream/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+
+# 运行产物
+/maps/*
+!/maps/README.md
+/bags/
+/logs/
+/dist/
+*.db3
+*.mcap
+
+# IDE
+.vscode/
+.idea/
