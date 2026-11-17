@@ -201,6 +201,9 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except (RuntimeError, TypeError):
+        if rclpy.ok():                 # messages taken while the context shuts down are harmless
+            raise
     finally:
         node.stop_base()
         node.destroy_node()

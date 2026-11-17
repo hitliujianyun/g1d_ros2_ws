@@ -106,7 +106,11 @@ class TestRelocalization(unittest.TestCase):
         return until() if until is not None else True
 
     def error(self):
-        s, (x, y, yaw) = self.status[-1], gt_planar(self.gt[-1])
+        """Status pose vs the ground truth at the status stamp (the status is published at 2 Hz)."""
+        s = self.status[-1]
+        t = s.header.stamp.sec + s.header.stamp.nanosec * 1e-9
+        gt = min(self.gt[-200:], key=lambda m: abs(m.header.stamp.sec + m.header.stamp.nanosec * 1e-9 - t))
+        x, y, yaw = gt_planar(gt)
         return math.hypot(s.pose.x - x, s.pose.y - y), abs(wrap(s.pose.theta - yaw))
 
     def converged(self):
