@@ -77,6 +77,7 @@ class ChassisSim(Node):
         self.aborted_actions = 0
         self.lock = threading.Lock()
         self.k = 0
+        self._last_tick = None
 
         self.pub_odom = self.create_publisher(Odometry, "/slamware_ros_sdk_server_node/odom", 10)
         self.pub_scan = self.create_publisher(LaserScan, "/slamware_ros_sdk_server_node/scan", 10)
@@ -155,8 +156,12 @@ class ChassisSim(Node):
     # ---- loop -------------------------------------------------------------------------------
     def tick(self) -> None:
         self.k += 1
+        now_mono = time.monotonic()
+        # integrate over the real elapsed time so ground-truth poses match their stamps under load
+        dt = 1.0 / self.rate if self._last_tick is None else min(max(now_mono - self._last_tick, 0.0), 0.1)
+        self._last_tick = now_mono
         with self.lock:
-            self.dd.step(time.monotonic(), 1.0 / self.rate)
+            self.dd.step(now_mono, dt)
             x, y, th = self.dd.pose
             v, w = self.dd.v, self.dd.w
         gap = footprint_gap((x, y, th), self.body_boxes) if self.body_boxes else math.inf
