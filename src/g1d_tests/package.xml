@@ -16,6 +16,9 @@
   <test_depend>g1d_bringup</test_depend>
   <test_depend>g1d_msgs</test_depend>
   <test_depend>g1d_sim</test_depend>
+  <test_depend>g1d_core</test_depend>
+  <test_depend>sensor_msgs_py</test_depend>
+  <test_depend>python3-numpy</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

@@ -1,0 +1,12 @@
+# 仿真用自身点过滤：与 lidar_sim 的 body_boxes（lio.launch.py 中 SIM_BODY_BOXES）对应，留 5 cm 余量。
+self_filter:
+  ros__parameters:
+    lidar_frame: livox_frame
+    min_range: 0.3
+    boxes: [carried, chassis]
+    carried:                     # 仿真中车头上方的"手臂 / 携带物"
+      frame: base_link
+      box: [0.25, 0.50, -0.25, 0.25, 0.90, 1.20]
+    chassis:
+      frame: base_link
+      box: [-0.32, 0.32, -0.30, 0.30, -0.05, 0.70]
