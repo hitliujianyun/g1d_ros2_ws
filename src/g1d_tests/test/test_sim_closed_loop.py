@@ -2,6 +2,7 @@
 navigation command stream. Checks the 0.6 s stop requirement, e-stop, remote override, TF chain,
 SLAMWARE restamping and the body lock.
 """
+import json
 import math
 import os
 import time
@@ -111,7 +112,14 @@ class TestSimClosedLoop(unittest.TestCase):
         self.spin(3.0, until=lambda: self.speed() < 0.02)
         t_stop = next(t for t, m in self.gt if t > t_last and m.twist.twist.linear.x < 0.02)
         t_zero = next(t for t, m in self.out[n_out:] if t > t_last and abs(m.linear.x) < 1e-6)
-        print(f"guard command zero after {t_zero - t_last:.3f} s, base stopped after {t_stop - t_last:.3f} s")
+        report = {"guard_zero_s": round(t_zero - t_last, 3), "base_stop_s": round(t_stop - t_last, 3),
+                  "limit_s": STOP_LIMIT_S, "speed": 0.40}
+        print(f"closed-loop stop: {report}")
+        out_dir = os.environ.get("G1D_TEST_REPORT_DIR")
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+            with open(os.path.join(out_dir, "closed_loop_stop.json"), "w", encoding="utf-8") as f:
+                json.dump(report, f)
         self.assertLessEqual(t_zero - t_last, STOP_LIMIT_S)
         self.assertLessEqual(t_stop - t_last, STOP_LIMIT_S + 0.1)   # + simulated chassis lag
 
