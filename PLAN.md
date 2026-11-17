@@ -14,23 +14,25 @@
 
 ## 2. TODO
 
-### M0 仓库与 CI
+### M0 仓库与 CI（计划：`docs/superpowers/plans/2026-11-17-m0-m2-foundation.md`）
 - [x] git 初始化、`.gitattributes`（LF）、`.gitignore`、设计文档、本文件
-- [ ] 上游克隆到 `_upstream/`；submodule（未修改）与 vendor（原样提交 → 补丁）
-- [ ] 包骨架、GitHub Actions（core-tests / ros-build / ros-integration）
-- [ ] 创建 GitHub 仓库并推送
+- [x] `upstream.lock` + `scripts/clone_upstream.py`；`unitree_ros2` 子模块 @ `668d1ec`
+- [x] GitHub Actions：lint-text、core-tests（Ubuntu + Windows）、ros（`ros:jazzy` 构建 + 单测 + 闭环集成测试）
+- [x] 公开仓库 `hitliujianyun/g1d_ros2_ws` 并推送
 
 ### M1 接口与 TF
-- [ ] `g1d_msgs`
-- [ ] `g1d_description`（G1-D URDF + livox / base_link / chassis_laser）
-- [ ] `g1d_robot_bridge`（重打时间戳、joint_states、姿态锁定、HTTP 事件）
-- [ ] `g1d_sim` 底盘部分（差速、指令超时、滞后时间戳、宇树关节话题）
-- [ ] `check_interfaces`、`cmd_vel_probe`（ROS 2 版）
+- [x] `g1d_msgs`（GuardState、BodyLock）
+- [x] `g1d_description`：HF URDF 原样提交 → mesh 路径补丁；xacro 增加 `base_link` / `livox_frame` / `livox_imu` / `chassis_laser`；`extrinsics.yaml`；mesh 下载脚本
+- [x] `g1d_core.kinematics`（URDF 正运动学，与手算链一致到 1e-5）、`g1d_core.body`（关节映射、姿态锁定）
+- [x] `g1d_robot_bridge`：`chassis_restamp`、`body_state`、`chassis_events`
+- [x] `g1d_sim` `chassis_sim`（差速 + 指令超时、滞后 181 s 时间戳、底盘雷达、宇树关节 / 遥控话题、HTTP 事件、真值）
+- [x] `g1d_tools`：`check_interfaces`、`cmd_vel_probe`（含放行门槛判定）
 
 ### M2 安全守护
-- [ ] `g1d_core.guard`（迁移 `guard_core.py` + 单测）
-- [ ] `g1d_guard` 节点、遥控 deadman、急停、写入者检查
-- [ ] CI：杀导航 ≤ 0.6 s 停车
+- [x] `g1d_core.guard`（原样迁移 `guard_core.py` + 17 项单测，新增部署参数停车测试）
+- [x] `g1d_guard` 节点：TF 输入、急停锁存、遥控接管、运行时参数白名单、写入者检查
+- [x] `g1d_bringup`：`robot_interface.launch.py`、`sim.launch.py`、CycloneDDS 有线 / WiFi 配置、`g1d_env.sh`
+- [x] CI 闭环：导航停发后停车 ≤ 0.6 s、急停、遥控器接管、TF 链、重打时间戳、姿态锁定
 
 ### M3 雷达与 LIO
 - [ ] livox_ros_driver2 补丁（Mid-360S 配置、时钟映射）
@@ -69,6 +71,7 @@
 | 时间 | 进度 |
 |---|---|
 | 2026-11-17 | 需求澄清与方案评审：Jazzy 跑在 5090 主机、守护为主机 rclpy 节点、模块化建图 / 重定位、CI 验证、Web 纳入本期。本机为 OpenStack 虚拟机（无硬件虚拟化，WSL2 / Docker 不可用）。设计文档提交 |
+| 2026-11-17 | M0–M2 完成：仓库与 CI；G1-D 描述（URDF 来自 HF 数据集 @27b13d3）；机器人接口三个节点；仿真底盘；守护节点；现场工具；CI 全绿（Windows / Ubuntu 核心库 45 项；Jazzy 容器 58 项含闭环）。闭环实测：0.40 m/s 时导航停发 → 守护指令 0.486 s 归零、仿真底盘 0.503 s 停住（要求 ≤ 0.6 s）。修正：Mid-360 IMU 外参符号（livox→imu = (0.011, 0.02329, −0.04412)）；守护减速度保持 1.5 m/s²（前倾临界约 2.7 m/s²），`vx_max` 降为 0.40 = MPPI 上限，停车 ≈ 0.52 s。CI 踩坑：`set -u` 与 ROS setup.bash 冲突；unitree 消息包未声明 `rosidl_generator_dds_idl`；并行测试串扰（改为每包独立 `ROS_DOMAIN_ID` + 顺序执行）；best-effort 发布者需 best-effort 订阅 |
 
 ## 4. 上机待办（本机无法完成）
 
