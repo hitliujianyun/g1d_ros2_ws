@@ -1,0 +1,33 @@
+# NavGPT-style navigation goal (g1d_nav_manager), design doc 5.5.
+#   mode:  navigate (Nav2 planner + MPPI) | rotate (in place) | simple (turn, then drive straight) | stop
+#   frame: base_at_stamp (relative to base_link at `stamp`, e.g. the image time; default)
+#          | base (relative to base_link now) | odom | map (absolute)
+string id
+string mode
+string frame
+builtin_interfaces/Time stamp
+float64 x
+float64 y
+float64 yaw
+bool use_yaw              # false: the final heading is not enforced
+float32 max_speed         # m/s, 0 = default (never above the controller limit)
+float32 timeout_s         # 0 = default
+---
+# state: SUCCEEDED | FAILED | CANCELED
+# reason: "" | yaw_not_reached | goal_in_obstacle | goal_out_of_range | goal_stamp_unavailable | no_path | blocked
+#   | timeout | lio_lost | localization_lost | body_not_locked | body_moved | guard_estop | manual_override
+#   | sensor_stale | tf_error | invalid_goal | stop
+string state
+string reason
+bool partial              # goal clipped to the maximum distance
+bool adjusted             # goal moved out of an obstacle
+geometry_msgs/Pose2D goal         # goal actually used (global frame)
+geometry_msgs/Pose2D final_pose   # base_link at the end (global frame)
+int32[] free_sector_angles        # deg relative to the heading (-90 .. 90)
+bool[] free_sectors               # 1.5 m corridor free in that direction
+---
+string state              # PLANNING | NAVIGATING | ROTATING | DRIVING
+float32 distance_remaining
+float32 yaw_error
+geometry_msgs/Pose2D pose
+string guard_blocked      # "" or the guard's blocking reason
