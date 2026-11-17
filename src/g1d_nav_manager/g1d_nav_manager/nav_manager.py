@@ -222,7 +222,7 @@ class NavManager(Node):
         except Abort as a:
             res.state, res.reason = a.state, a.reason
             if a.reason != "preempted" and nav_handle[0] is not None:
-                nav_handle[0].cancel_goal_async()
+                self.cancel_and_wait(nav_handle[0])
         p = self.robot_pose()
         if p is not None:
             res.final_pose.x, res.final_pose.y, res.final_pose.theta = p
@@ -238,6 +238,14 @@ class NavManager(Node):
         else:
             gh.abort()
         return res
+
+    @staticmethod
+    def cancel_and_wait(handle, timeout=3.0):
+        """A goal sent while Nav2 is still halting the previous one fails at once, so wait for the result."""
+        ev = threading.Event()
+        handle.cancel_goal_async()
+        handle.get_result_async().add_done_callback(lambda _: ev.set())
+        ev.wait(timeout)
 
     def monitor(self, gh, my_id, fut_result, t_end, feedback_state, goal=None, nav_handle=None):
         """Waits for a Nav2 action result while checking abort conditions."""
