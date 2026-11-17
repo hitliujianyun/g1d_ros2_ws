@@ -32,6 +32,8 @@ def generate_launch_description():
         DeclareLaunchArgument("point_filter_num", default_value="1"),
         DeclareLaunchArgument("mapping", default_value="false", description="pgo + map_manager (needs lio:=true)"),
         DeclareLaunchArgument("maps_dir", default_value="~/g1d_maps"),
+        DeclareLaunchArgument("nav", default_value="false",
+                              description="odom-mode localization + Nav2 + nav_manager (needs lio:=true)"),
         Node(package="g1d_sim", executable="chassis_sim", name="chassis_sim", output="screen",
              parameters=[{"world": LaunchConfiguration("world"),
                           "http_port": ParameterValue(port, value_type=int),
@@ -56,4 +58,10 @@ def generate_launch_description():
             launch_arguments={"maps_dir": LaunchConfiguration("maps_dir"),
                               "pgo_config": os.path.join(
                                   get_package_share_directory("g1d_bringup"), "config", "pgo_sim.yaml")}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(launch_dir, "localization.launch.py")),
+            condition=IfCondition(LaunchConfiguration("nav")), launch_arguments={"mode": "odom"}.items()),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(launch_dir, "navigation.launch.py")),
+            condition=IfCondition(LaunchConfiguration("nav")), launch_arguments={"global_frame": "odom"}.items()),
     ])
