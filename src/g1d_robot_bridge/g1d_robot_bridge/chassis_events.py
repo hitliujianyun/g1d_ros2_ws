@@ -6,6 +6,7 @@ import threading
 
 import rclpy
 from g1d_core.chassis_http import ChassisHttp, EventTracker
+from g1d_core.shutdown import context_closing
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
@@ -55,7 +56,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

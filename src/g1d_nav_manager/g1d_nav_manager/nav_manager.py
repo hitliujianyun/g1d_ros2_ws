@@ -21,6 +21,7 @@ from builtin_interfaces.msg import Duration
 from g1d_core.lio import make_tf, wrap, yaw_of
 from g1d_core.navgoal import (SECTOR_ANGLES, CostGrid, GoalParams, free_sectors, nav2_reason,
                               relative_to_global, sanitize_goal)
+from g1d_core.shutdown import context_closing
 from g1d_msgs.action import NavigateRelative
 from g1d_msgs.msg import BodyLock, GuardState, LioHealth, LocalizationStatus
 from geometry_msgs.msg import PoseStamped
@@ -372,7 +373,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

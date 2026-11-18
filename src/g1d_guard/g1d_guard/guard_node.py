@@ -14,6 +14,7 @@ import numpy as np
 import rclpy
 from g1d_core.chassis_http import ChassisHttp
 from g1d_core.guard import TUNABLE, GuardCore, GuardParams, scan_to_points
+from g1d_core.shutdown import context_closing
 from g1d_msgs.msg import GuardState
 from geometry_msgs.msg import Twist
 from rcl_interfaces.msg import SetParametersResult
@@ -202,7 +203,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # messages taken while the context shuts down are harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.stop_base()

@@ -18,6 +18,7 @@ import yaml
 from g1d_core.grid import GridParams, build_grid, save_map
 from g1d_core.lio import inv, make_tf, matrix_to_quat, yaw_of
 from g1d_core.pcd import read_pcd, read_poses_txt, transform, voxel_downsample, write_pcd, xyz
+from g1d_core.shutdown import context_closing
 from g1d_msgs.srv import SaveMap
 from geometry_msgs.msg import TransformStamped
 from interface.srv import SaveMaps
@@ -160,7 +161,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

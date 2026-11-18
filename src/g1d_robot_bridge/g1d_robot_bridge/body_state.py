@@ -13,6 +13,7 @@ from dataclasses import fields
 import rclpy
 from g1d_core.body import (BodyConfig, BodySample, LockChecker, arms_from_lowstate,
                            joint_positions, lift_height)
+from g1d_core.shutdown import context_closing
 from g1d_msgs.msg import BodyLock
 from geometry_msgs.msg import Point32
 from rclpy.node import Node
@@ -104,8 +105,8 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    except RuntimeError:
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+    except (RuntimeError, TypeError):
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

@@ -16,8 +16,10 @@ import numpy as np
 import rclpy
 import yaml
 from g1d_core.lio import inv, make_tf, yaw_of
+from g1d_core.localization import LocalizationHealth, LocalizationParams
 from g1d_core.pcd import read_pcd, xyz
 from g1d_core.reloc import SearchParams, VoxelMap, global_search, subsample_seeds
+from g1d_core.shutdown import context_closing
 from g1d_msgs.msg import LocalizationStatus
 from g1d_msgs.srv import Relocalize
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -45,8 +47,11 @@ class LocalizationMonitor(Node):
         self.map_frame = d("map_frame", "map").value
         self.odom_frame = d("odom_frame", "odom").value
         self.base_frame = d("base_frame", "base_link").value
-        self.min_inlier_ratio = float(d("min_inlier_ratio", 0.5).value)
-        self.lost_timeout = float(d("lost_timeout_s", 3.0).value)
+        self.health = LocalizationHealth(LocalizationParams(
+            min_inlier_ratio=float(d("min_inlier_ratio", 0.5).value),
+            max_failed=int(d("max_failed_registrations", 4).value),
+            slow_s=float(d("registration_slow_s", 3.0).value),
+            stale_s=float(d("registration_stale_s", 10.0).value)))
         self.save_every = float(d("save_last_pose_every_s", 5.0).value)
         self.startup_init = d("startup_init", "none").value      # none | last | auto
         self.scan_window = float(d("scan_window_s", 1.5).value)
@@ -54,8 +59,6 @@ class LocalizationMonitor(Node):
         self.cb = ReentrantCallbackGroup()
         self.tf = Buffer()
         self.tf_listener = TransformListener(self.tf, self)
-        self.last_status = None
-        self.last_ok = None
         self.prev_map_odom = None
         self.correction = 0.0
         self.scans = deque()
@@ -82,10 +85,7 @@ class LocalizationMonitor(Node):
         if len(m.data) < 4:
             return
         converged, inliers, source, error = m.data[:4]
-        ratio = inliers / source if source > 0 else 0.0
-        self.last_status = (bool(converged), ratio, error, time.monotonic())
-        if converged and ratio >= self.min_inlier_ratio:
-            self.last_ok = time.monotonic()
+        self.health.update(time.monotonic(), bool(converged), inliers, source, error)
         mo = self.lookup(self.map_frame, self.odom_frame)
         if mo is not None:
             if self.prev_map_odom is not None:
@@ -116,7 +116,7 @@ class LocalizationMonitor(Node):
         m.pose.covariance[0] = m.pose.covariance[7] = 0.25
         m.pose.covariance[35] = 0.07
         self.pub_init.publish(m)
-        self.last_ok = None                          # wait for small_gicp to confirm
+        self.health.reset()                          # wait for small_gicp to confirm
         self.get_logger().info(f"initial pose x={x:.2f} y={y:.2f} yaw={math.degrees(yaw):.1f} deg")
 
     def load_map(self) -> None:
@@ -233,17 +233,7 @@ class LocalizationMonitor(Node):
     def localized(self):
         if self.mode == "odom":
             return True, []
-        if self.last_status is None:
-            return False, ["no_registration"]
-        reasons = []
-        conv, ratio, _, _ = self.last_status
-        if not conv:
-            reasons.append("not_converged")
-        elif ratio < self.min_inlier_ratio:
-            reasons.append("low_inliers")
-        if self.last_ok is None or time.monotonic() - self.last_ok > self.lost_timeout:
-            reasons.append("lost_timeout")
-        return "lost_timeout" not in reasons, reasons
+        return self.health.status(time.monotonic())
 
     def publish_status(self) -> None:
         ok, reasons = self.localized()
@@ -253,9 +243,10 @@ class LocalizationMonitor(Node):
         m.mode = self.mode
         m.localized = ok
         m.reasons = reasons
-        if self.last_status is not None:
-            m.inlier_ratio, m.error = float(self.last_status[1]), float(self.last_status[2])
-        m.last_ok_age = -1.0 if self.last_ok is None else float(time.monotonic() - self.last_ok)
+        h = self.health
+        if h.last_result is not None:
+            m.inlier_ratio, m.error = float(h.last_result[1]), float(h.last_result[2])
+        m.last_ok_age = -1.0 if h.last_ok is None else float(time.monotonic() - h.last_ok)
         m.correction = float(self.correction)
         try:
             t = self.tf.lookup_transform(self.map_frame, self.base_frame, Time())
@@ -278,7 +269,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

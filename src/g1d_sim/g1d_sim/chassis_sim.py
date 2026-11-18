@@ -21,6 +21,7 @@ import rclpy
 from ament_index_python.packages import get_package_share_directory
 from g1d_core.sim2d import (SLAMWARE_STAMP_LAG_S, DiffDrive, DiffDriveParams, boxes_at_height,
                             boxes_in_band, footprint_gap, load_world, raycast_boxes)
+from g1d_core.shutdown import context_closing
 from geometry_msgs.msg import Point32, Twist
 from nav_msgs.msg import Odometry
 from rclpy.duration import Duration
@@ -236,7 +237,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

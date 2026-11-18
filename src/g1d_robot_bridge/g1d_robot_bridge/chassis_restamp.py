@@ -4,6 +4,7 @@ SLAMWARE header stamps lag the host clock by ~181 s and drift by seconds per day
 costmaps would drop the data. The original offset is logged so drifts stay visible.
 """
 import rclpy
+from g1d_core.shutdown import context_closing
 from nav_msgs.msg import Odometry
 from rclpy.duration import Duration
 from rclpy.node import Node
@@ -65,7 +66,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()

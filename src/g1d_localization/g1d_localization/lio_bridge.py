@@ -11,6 +11,7 @@ import math
 import numpy as np
 import rclpy
 from g1d_core.lio import BridgeState, HealthParams, LioHealth, make_tf, matrix_to_quat
+from g1d_core.shutdown import context_closing
 from g1d_msgs.msg import LioHealth as LioHealthMsg
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
@@ -186,7 +187,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except (RuntimeError, TypeError):
-        if rclpy.ok():                 # a message taken while the context shuts down is harmless
+        if not context_closing(rclpy.ok):   # taken while the context shuts down: harmless
             raise
     finally:
         node.destroy_node()
