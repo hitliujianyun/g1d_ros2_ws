@@ -88,8 +88,12 @@ class TestMapNavigation(unittest.TestCase):
         t0 = time.monotonic()
         r = self.nav.wait(self.nav.send(**kw), timeout=150.0)
         p = planar(self.gt[-1])
+        s = self.status[-1]
         self.report[name] = {"result": r, "gt_final": [round(v, 3) for v in p],
-                             "time_s": round(time.monotonic() - t0, 1)}
+                             "time_s": round(time.monotonic() - t0, 1),
+                             "localization": {"localized": s.localized, "reasons": list(s.reasons),
+                                              "inlier_ratio": round(s.inlier_ratio, 3),
+                                              "last_ok_age": round(s.last_ok_age, 2)}}
         print(f"{name}: {self.report[name]}")
         return r, p
 
