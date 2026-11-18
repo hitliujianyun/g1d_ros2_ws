@@ -1,6 +1,6 @@
 # 移植到实机与参数设置
 
-本文面向把工程装到导航主机、接上 G1-D 并逐步放开自主导航的工程师。设计背景见 [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)，外参标定见 [`CALIBRATION.md`](CALIBRATION.md)。
+本文是参数与故障排查的速查表。第一次上机请按 [`BRINGUP_GUIDE.md`](BRINGUP_GUIDE.md) 一步步做（含完整的适配点清单），原理见 [`principles.html`](principles.html)，设计背景见 [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)，外参标定见 [`CALIBRATION.md`](CALIBRATION.md)。
 
 ## 1. 硬件与网络
 
@@ -104,7 +104,10 @@ ros2 run g1d_tools acceptance T2      # 指令中断停车时间 <= 0.6 s
 
 ### P3 建图
 
+建图时 LIO 要用 `respawn:=false` 启动（FAST_LIO 崩溃重启后坐标系会变，位姿图会被破坏）：
+
 ```bash
+ros2 launch g1d_bringup lio.launch.py lidar_source:=livox host_ip:=192.168.123.222 respawn:=false
 ros2 launch g1d_bringup mapping.launch.py maps_dir:=~/g1d_maps
 # 遥控或 Web 绕场地一周，尽量回到起点形成闭环
 ros2 service call /g1d/save_map g1d_msgs/srv/SaveMap "{name: office}"

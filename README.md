@@ -10,7 +10,7 @@
 - NavGPT：相对航点 + 图像时刻，延迟补偿，失败返回原因与可通行方向；
 - 工具：RViz2 / Foxglove、浏览器调试台、接口探测、底盘指令实测、外参标定、rosbag2 预设、验收 T1–T7。
 
-文档：[项目详细介绍](docs/PROJECT_OVERVIEW.md) · [移植到实机与参数设置](docs/DEPLOYMENT.md) · [标定说明](docs/CALIBRATION.md) · [计划与进度](PLAN.md) · [设计文档](docs/superpowers/specs/2026-11-17-g1d-ros2-nav-design.md)
+文档：[系统原理（HTML）](docs/principles.html) · [上机部署教程与适配清单](docs/BRINGUP_GUIDE.md) · [项目详细介绍](docs/PROJECT_OVERVIEW.md) · [参数与故障排查速查](docs/DEPLOYMENT.md) · [标定说明](docs/CALIBRATION.md) · [计划与进度](PLAN.md) · [设计文档](docs/superpowers/specs/2026-11-17-g1d-ros2-nav-design.md)
 
 ## 运行环境
 
@@ -55,7 +55,7 @@ ros2 launch g1d_bringup navigation.launch.py global_frame:=map
 ros2 launch g1d_bringup web.launch.py
 ```
 
-分阶段上线、必须标定的参数和故障排查见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+上机按 [docs/BRINGUP_GUIDE.md](docs/BRINGUP_GUIDE.md) 分阶段进行（含需要适配的点总表）；参数与故障排查速查见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ## NavGPT 调用
 
