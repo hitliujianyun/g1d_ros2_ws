@@ -10,6 +10,9 @@
 | 自身点盒子 | `src/g1d_bringup/config/self_filter.yaml` | RViz 观察静止点云 |
 | 导航姿态（`nav_waist_pitch`、`arm_tuck`） | `robot_bridge.yaml` | `ros2 topic echo /joint_states` |
 | Mid-360 内置 IMU 相对点云（出厂值 `(0.011, 0.02329, −0.04412)`） | `extrinsics.yaml` / `fast_lio.yaml` | 一般不需要改 |
+| 底盘雷达安装位姿（`chassis_laser` = URDF 上游的 `Lidar_Link`，单位变换） | `src/g1d_description/urdf/g1d.urdf.xacro` | 第 6 节核对；雷达偏航标定以它为基准 |
+| 关节序号（`waist_yaw_index`、`arm_first_index`） | `robot_bridge.yaml` | 第 7 节 |
+| SLAMWARE 数据延迟（`odom_latency`、`scan_latency`） | `robot_bridge.yaml` | 第 8 节（默认 0 即可） |
 
 ## 1. 雷达外参（地面法 + 底盘雷达对齐）
 
@@ -44,7 +47,7 @@ ros2 run g1d_tools calib_extrinsics --yaw-from-scan --write src/g1d_description/
 
 ## 4. 导航姿态
 
-摆好导航时的腰部与手臂姿态，`ros2 topic echo /joint_states --once`，把 `Yaw_Joint` 写入 `nav_waist_pitch`，14 个手臂关节按 `left_shoulder_pitch … right_wrist_yaw` 顺序写入 `arm_tuck`。容差：腰 2°、手臂 5°、升降 1 cm（`tol_*`）。
+摆好导航时的腰部与手臂姿态，`ros2 topic echo /joint_states --once`，把 `Yaw_Joint` 写入 `nav_waist_pitch`（上游 URDF 的命名如此，这个关节实际是腰部**俯仰**；腰部偏航 `torso_Joint` 导航时必须为 0），14 个手臂关节按 `left_shoulder_pitch … right_wrist_yaw` 顺序写入 `arm_tuck`。容差：腰 2°、手臂 5°、升降 1 cm（`tol_*`）。
 
 ## 5. 底盘指令行为（不是标定，但决定守护参数）
 
@@ -53,3 +56,15 @@ ros2 run g1d_tools cmd_vel_probe --tests silence,zero,clamp,hold --i-know-it-mov
 ```
 
 `silence.stop_time_s` → `release_gate`（≤ 0.6 s 放行）与 `zero_hold` 建议值；`clamp` → 底盘是否限幅；`hold` → 发零速时是否锁轮。
+
+## 6. 底盘雷达位姿核对
+
+`chassis_laser` 直接挂在上游 URDF 的 `Lidar_Link` 上（单位变换）。第 1 节的雷达偏航以底盘雷达为基准，所以先确认它本身没问题：机器人正对一面墙（1–2 m），RViz 固定坐标系设为 `base_link`，显示 `/chassis/scan`。墙线应与 `base_link` 的 y 轴平行、距离与卷尺一致（±2 cm）。若有固定偏差，在 `g1d.urdf.xacro` 的 `chassis_laser_joint` 里补偿，并在 `g1d_description/UPSTREAM.md` 记录。
+
+## 7. 关节序号
+
+`/lowstate` 的 `motor_state` 序号按宇树 G1 约定：12 = 腰部偏航，15–28 = 左臂 7 + 右臂 7（肩俯仰、肩横滚、肩偏航、肘、腕横滚、腕俯仰、腕偏航）。逐个关节轻微转动手臂（或用宇树 App 示教），对照 `ros2 topic echo /lowstate --field motor_state` 中变化的序号；不一致时改 `waist_yaw_index` / `arm_first_index`。验证：RViz 中机器人模型的手臂动作与实物一致。
+
+## 8. SLAMWARE 数据延迟
+
+`chassis_restamp` 用主机接收时间重打时间戳（原始戳约落后 181 s，日志定期打印）。接收时间比真实测量时刻晚一个网络 + SLAMWARE 处理延迟，通常几十毫秒，导航可以忽略。若想补偿：机器人以 0.3 m/s 直行，比较 `/chassis/odom` 与 LIO（`/odometry`）的位置曲线，使两者对齐所需的时间平移即为 `odom_latency`；`scan_latency` 用同样方法比较底盘雷达与 Mid-360S 看到的同一面墙。
