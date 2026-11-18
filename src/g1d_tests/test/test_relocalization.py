@@ -11,45 +11,23 @@ import unittest
 import launch
 import launch_testing
 import launch_testing.actions
-import numpy as np
 import pytest
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Twist
-from g1d_core.grid import build_grid, save_map
 from g1d_core.lio import wrap
-from g1d_core.pcd import write_pcd
-from g1d_core.sim2d import load_world
 from g1d_msgs.msg import LocalizationStatus
 from g1d_msgs.srv import Relocalize
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from nav_msgs.msg import Odometry
 
+from prior_map import make_prior_map
+
 REPORT_DIR = os.environ.get("G1D_TEST_REPORT_DIR", "/tmp/g1d_test_reports")
 MAP_DIR = os.path.join(REPORT_DIR, "reloc_map")
 START = (2.0, -1.0, 0.6)
 MAX_POS, MAX_YAW = 0.10, math.radians(2.0)
-
-
-def make_prior_map(world_yaml, out, step=0.05):
-    boxes = load_world(world_yaml)
-    pts = [(x, y, 0.0) for x in np.arange(-3.0, 9.0, 0.1) for y in np.arange(-4.4, 4.4, 0.1)]
-    for x0, y0, z0, x1, y1, z1 in boxes:
-        zs = np.arange(z0, z1 + 1e-9, step)
-        for z in zs:
-            pts += [(x, y, z) for x in np.arange(x0, x1 + 1e-9, step) for y in (y0, y1)]
-            pts += [(x, y, z) for y in np.arange(y0, y1 + 1e-9, step) for x in (x0, x1)]
-        pts += [(x, y, z1) for x in np.arange(x0, x1 + 1e-9, step) for y in np.arange(y0, y1 + 1e-9, step)]
-    pts = np.array(pts)
-    os.makedirs(out, exist_ok=True)
-    write_pcd(os.path.join(out, "map.pcd"), pts)
-    save_map(build_grid(pts), out, "map")
-    with open(os.path.join(out, "trajectory.csv"), "w", encoding="utf-8") as f:   # search seeds
-        f.write("x,y,yaw\n")
-        for x in np.arange(-2.5, 8.6, 0.5):
-            for y in np.arange(-4.0, 4.01, 0.5):
-                f.write(f"{x:.2f},{y:.2f},0.0\n")
 
 
 @pytest.mark.launch_test
