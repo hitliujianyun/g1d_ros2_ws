@@ -86,6 +86,8 @@
 
 | 2026-11-17 | M6 收尾，CI 全绿（Jazzy 122 项）。导航调试：MPPI 的 `model_dt` 必须 ≥ 控制周期；定位状态时间戳改用其 TF 时间（跟踪误差 0.205 → 0.011 m）；取消 Nav2 目标后等其结束再报告（否则下个目标立即失败）。MPPI 只有约 0.05 m/s 且偏转：用并行对照实验（`exp/nav-tuning` 分支 + `overlay` 参数）逐个排除 CPU / 频率 / 里程计 / RotationShim / 路径分辨率 / critics / footprint，最终定位到 `regenerate_noises: false`；同一链路 RPP 全部通过，默认改为 RPP。另发现 FAST_LIO 偶发启动段错误 → 自动重启 + odom 重新锚定。目标外移改为优先机器人一侧。导航实测见 docs/PROJECT_OVERVIEW.md 第 9 节 |
 
+| 2026-11-18 | 补上两类此前 CI 没覆盖、但上机必走的路径：①先验地图上导航（`test_map_navigation`）；②现场工具 launch（`test_tools_launch`：MCAP 录包、Web、foxglove）。①暴露了三个会让真机 map 模式导航失败的问题：small_gicp 的 `map → odom` 用滞后约 0.5 s 的扫描时间打戳（Nav2 报 "Transform data too old"）；单线程下一次配准期间 `map → odom` 停发；定位监视器把"配准慢"当成"丢失"（3 s 无结果即丢失）。修复：时钟打戳、多线程 + 独立回调组 + 有界累积（vendor 补丁）、丢失判据改为连续失败 / 10 s 停滞（`g1d_core.localization`，有单测）。另：所有常驻 Python 节点区分"关闭时的竞态异常"和真实故障（`g1d_core.shutdown`）；CALIBRATION.md 补底盘雷达核对、关节序号、SLAMWARE 延迟。CI 全绿（Jazzy 129 项） |
+
 **与设计文档的差异（均已在设计文档 / UPSTREAM.md 中注明）**：时钟映射补丁取消（驱动已用主机时钟）；KISS-Matcher 改为以建图轨迹为种子的全局搜索（依赖更轻、可单测）；守护 `vx_max` 0.40、减速度保持 1.5 m/s²（防前倾）、`cmd_timeout` 0.25 s；目标外移搜索半径 1.0 m；Mid-360 IMU 外参符号修正；默认局部控制器 RPP（MPPI 可选，`regenerate_noises: true`）；FAST_LIO 崩溃自动重启（建图时除外）。
 
 ## 4. 上机待办（本机无法完成）
