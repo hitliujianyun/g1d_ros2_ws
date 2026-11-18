@@ -196,7 +196,9 @@ void SmallGicpRelocalizationNode::publishTransform()
 
   geometry_msgs::msg::TransformStamped transform_stamped;
   // `+ 0.1` means transform into future. according to https://robotics.stackexchange.com/a/96615
-  transform_stamped.header.stamp = last_scan_time_ + rclcpp::Duration::from_seconds(0.1);
+  // Stamped from the clock, not the scan: scans lag by the LIO latency (~0.5 s), and Nav2 rejects a
+  // map -> odom older than its transform_tolerance when transforming the plan at the current time.
+  transform_stamped.header.stamp = this->now() + rclcpp::Duration::from_seconds(0.1);
   transform_stamped.header.frame_id = map_frame_;
   transform_stamped.child_frame_id = odom_frame_;
 
