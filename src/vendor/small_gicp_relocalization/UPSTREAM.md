@@ -20,6 +20,7 @@
 | `package.xml` 依赖 `small_gicp`；CMake 链接 `small_gicp::small_gicp`（已安装时的导出目标） | 保证构建顺序、使用子模块而不是 FetchContent 的 master |
 | `map → odom` 时间戳用当前时钟 + 0.1 s（上游：最近一帧扫描时间 + 0.1 s） | 扫描带着 LIO 处理延迟（CI 约 0.5 s），Nav2 在当前时刻转换路径时报 "Transform data too old"，map 模式导航全部 `tf_error`（`test_map_navigation` 发现）。map → odom 是缓慢变化的修正量，按 AMCL 惯例前推打戳 |
 | 多线程执行器；配准在独立回调组，共享数据加锁；配准期间收到新初值时丢弃这次结果（`pose_epoch_`） | 上游单线程：一次配准（CI 约 0.7 s）期间 20 Hz 的 `map → odom` 停发，Nav2 同样报 "Transform data too old" |
+| 只配准最近 `max_accumulated_scans`（默认 5）帧，替代无上限累积 | 多线程后配准期间扫描继续进来，无上限累积会让下一次配准更慢（正反馈）；上游单线程时靠订阅队列深度 10 隐式限制 |
 | `/initialpose` 用消息时间戳处的 `base → odom`（查不到时退回最新） | 上游用最新变换：消息被延迟处理时（单线程执行器在做配准），结果会偏移这段时间的运动距离（CI 中实测 1.6 m 跳变） |
 
 用法约定（无需修改代码）：g1d 保存的 `map.pcd` 已在 map 坐标系，`base_frame` 与 `lidar_frame` 都设为 `base_link`，使上游加载地图时的变换为单位阵；输入点云为 `lio_bridge` 发布的 `/g1d/registered_scan`（odom 系）。

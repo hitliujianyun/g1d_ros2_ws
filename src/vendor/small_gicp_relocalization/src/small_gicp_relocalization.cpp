@@ -14,6 +14,8 @@
 
 #include "small_gicp_relocalization/small_gicp_relocalization.hpp"
 
+#include <algorithm>
+
 #include "pcl/common/transforms.h"
 #include "pcl_conversions/pcl_conversions.h"
 #include "small_gicp/pcl/pcl_registration.hpp"
@@ -41,6 +43,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->declare_parameter("prior_pcd_file", "");
   this->declare_parameter("init_pose", std::vector<double>{0., 0., 0., 0., 0., 0.});
   this->declare_parameter("input_cloud_topic", "registered_scan");
+  this->declare_parameter("max_accumulated_scans", 5);
 
   this->get_parameter("num_threads", num_threads_);
   this->get_parameter("num_neighbors", num_neighbors_);
@@ -55,6 +58,7 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
   this->get_parameter("prior_pcd_file", prior_pcd_file_);
   this->get_parameter("init_pose", init_pose_);
   this->get_parameter("input_cloud_topic", input_cloud_topic_);
+  this->get_parameter("max_accumulated_scans", max_accumulated_scans_);
 
   // [x, y, z, roll, pitch, yaw] - init_pose parameters
   if (!init_pose_.empty() && init_pose_.size() >= 6) {
@@ -146,7 +150,10 @@ void SmallGicpRelocalizationNode::registeredPcdCallback(
   std::lock_guard<std::mutex> lock(data_mutex_);
   last_scan_time_ = msg->header.stamp;
   current_scan_frame_id_ = msg->header.frame_id;
-  *accumulated_cloud_ += *scan;
+  recent_scans_.push_back(scan);
+  while (static_cast<int>(recent_scans_.size()) > std::max(1, max_accumulated_scans_)) {
+    recent_scans_.pop_front();
+  }
 }
 
 void SmallGicpRelocalizationNode::performRegistration()
@@ -156,7 +163,10 @@ void SmallGicpRelocalizationNode::performRegistration()
   uint64_t epoch;
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    cloud.swap(accumulated_cloud_);
+    for (const auto & scan : recent_scans_) {
+      *cloud += *scan;
+    }
+    recent_scans_.clear();
     guess = previous_result_t_;
     epoch = pose_epoch_;
   }

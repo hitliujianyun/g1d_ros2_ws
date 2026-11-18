@@ -16,6 +16,7 @@
 #define SMALL_GICP_RELOCALIZATION__SMALL_GICP_RELOCALIZATION_HPP_
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -90,11 +91,15 @@ private:
   rclcpp::TimerBase::SharedPtr register_timer_;
 
   // g1d: registration runs in its own callback group (multi-threaded executor); data_mutex_ guards
-  // accumulated_cloud_, result_t_, previous_result_t_, last_scan_time_, current_scan_frame_id_.
+  // recent_scans_, result_t_, previous_result_t_, last_scan_time_, current_scan_frame_id_.
   // pose_epoch_ counts initial poses so a registration started before one does not overwrite it.
+  // Only the last max_accumulated_scans_ scans are registered: scans keep arriving during a slow
+  // registration, and an unbounded accumulation makes the next one slower still.
   rclcpp::CallbackGroup::SharedPtr registration_group_;
   std::mutex data_mutex_;
   uint64_t pose_epoch_ = 0;
+  int max_accumulated_scans_;
+  std::deque<pcl::PointCloud<pcl::PointXYZ>::Ptr> recent_scans_;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
