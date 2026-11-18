@@ -56,9 +56,11 @@ target_link_libraries(${PROJECT_NAME}
   ${SMALL_GICP_TARGET}
 )
 
+# g1d: multi-threaded so the 20 Hz map -> odom broadcast is not blocked by a registration
 rclcpp_components_register_node(${PROJECT_NAME}
   PLUGIN small_gicp_relocalization::SmallGicpRelocalizationNode
   EXECUTABLE ${PROJECT_NAME}_node
+  EXECUTOR MultiThreadedExecutor
 )
 
 #############

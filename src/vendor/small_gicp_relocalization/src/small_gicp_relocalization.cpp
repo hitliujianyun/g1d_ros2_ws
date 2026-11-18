@@ -99,9 +99,10 @@ SmallGicpRelocalizationNode::SmallGicpRelocalizationNode(const rclcpp::NodeOptio
 
   status_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("~/status", 10);
 
+  registration_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   register_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(500),  // 2 Hz
-    std::bind(&SmallGicpRelocalizationNode::performRegistration, this));
+    std::bind(&SmallGicpRelocalizationNode::performRegistration, this), registration_group_);
 
   transform_timer_ = this->create_wall_timer(
     std::chrono::milliseconds(50),  // 20 Hz
@@ -139,24 +140,34 @@ void SmallGicpRelocalizationNode::loadGlobalMap(const std::string & file_name)
 void SmallGicpRelocalizationNode::registeredPcdCallback(
   const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
-  last_scan_time_ = msg->header.stamp;
-  current_scan_frame_id_ = msg->header.frame_id;
-
   pcl::PointCloud<pcl::PointXYZ>::Ptr scan(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(*msg, *scan);
+
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  last_scan_time_ = msg->header.stamp;
+  current_scan_frame_id_ = msg->header.frame_id;
   *accumulated_cloud_ += *scan;
 }
 
 void SmallGicpRelocalizationNode::performRegistration()
 {
-  if (accumulated_cloud_->empty()) {
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
+  Eigen::Isometry3d guess;
+  uint64_t epoch;
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    cloud.swap(accumulated_cloud_);
+    guess = previous_result_t_;
+    epoch = pose_epoch_;
+  }
+  if (cloud->empty()) {
     RCLCPP_WARN(this->get_logger(), "No accumulated points to process.");
     return;
   }
 
   source_ = small_gicp::voxelgrid_sampling_omp<
     pcl::PointCloud<pcl::PointXYZ>, pcl::PointCloud<pcl::PointCovariance>>(
-    *accumulated_cloud_, registered_leaf_size_);
+    *cloud, registered_leaf_size_);
 
   small_gicp::estimate_covariances_omp(*source_, num_neighbors_, num_threads_);
 
@@ -171,10 +182,13 @@ void SmallGicpRelocalizationNode::performRegistration()
   register_->rejector.max_dist_sq = max_dist_sq_;
   register_->optimizer.max_iterations = 10;
 
-  auto result = register_->align(*target_, *source_, *target_tree_, previous_result_t_);
+  auto result = register_->align(*target_, *source_, *target_tree_, guess);
 
   if (result.converged) {
-    result_t_ = previous_result_t_ = result.T_target_source;
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (epoch == pose_epoch_) {
+      result_t_ = previous_result_t_ = result.T_target_source;
+    }
   } else {
     RCLCPP_WARN(this->get_logger(), "GICP did not converge.");
   }
@@ -184,13 +198,16 @@ void SmallGicpRelocalizationNode::performRegistration()
     result.converged ? 1.0 : 0.0, static_cast<double>(result.num_inliers),
     static_cast<double>(source_->size()), result.error, static_cast<double>(result.iterations)};
   status_pub_->publish(status);
-
-  accumulated_cloud_->clear();
 }
 
 void SmallGicpRelocalizationNode::publishTransform()
 {
-  if (result_t_.matrix().isZero()) {
+  Eigen::Isometry3d result_t;
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    result_t = result_t_;
+  }
+  if (result_t.matrix().isZero()) {
     return;
   }
 
@@ -202,8 +219,8 @@ void SmallGicpRelocalizationNode::publishTransform()
   transform_stamped.header.frame_id = map_frame_;
   transform_stamped.child_frame_id = odom_frame_;
 
-  const Eigen::Vector3d translation = result_t_.translation();
-  const Eigen::Quaterniond rotation(result_t_.rotation());
+  const Eigen::Vector3d translation = result_t.translation();
+  const Eigen::Quaterniond rotation(result_t.rotation());
 
   transform_stamped.transform.translation.x = translation.x();
   transform_stamped.transform.translation.y = translation.y();
@@ -231,26 +248,32 @@ void SmallGicpRelocalizationNode::initialPoseCallback(
                                  msg->pose.pose.orientation.y, msg->pose.pose.orientation.z)
                                  .toRotationMatrix();
 
+  std::string scan_frame;
+  {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    scan_frame = current_scan_frame_id_;
+  }
   try {
     // g1d: base pose at the time the initial pose refers to (a delayed message must not be combined
     // with the current odometry, which would offset the result by the motion in between)
     geometry_msgs::msg::TransformStamped transform;
     try {
       transform = tf_buffer_->lookupTransform(
-        robot_base_frame_, current_scan_frame_id_, rclcpp::Time(msg->header.stamp),
+        robot_base_frame_, scan_frame, rclcpp::Time(msg->header.stamp),
         rclcpp::Duration::from_seconds(0.1));
     } catch (tf2::TransformException &) {
-      transform =
-        tf_buffer_->lookupTransform(robot_base_frame_, current_scan_frame_id_, tf2::TimePointZero);
+      transform = tf_buffer_->lookupTransform(robot_base_frame_, scan_frame, tf2::TimePointZero);
     }
     Eigen::Isometry3d robot_base_to_odom = tf2::transformToEigen(transform.transform);
     Eigen::Isometry3d map_to_odom = map_to_robot_base * robot_base_to_odom;
 
+    std::lock_guard<std::mutex> lock(data_mutex_);
     previous_result_t_ = result_t_ = map_to_odom;
+    ++pose_epoch_;
   } catch (tf2::TransformException & ex) {
     RCLCPP_WARN(
       this->get_logger(), "Could not transform initial pose from %s to %s: %s",
-      robot_base_frame_.c_str(), current_scan_frame_id_.c_str(), ex.what());
+      robot_base_frame_.c_str(), scan_frame.c_str(), ex.what());
   }
 }
 
