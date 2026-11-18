@@ -58,7 +58,7 @@
 - [x] `g1d_nav_manager`（NavigateRelative：navigate / rotate / simple / stop；base_at_stamp 延迟补偿；目标截断 / 外移 / 拒绝；Nav2 错误码 → reason；free_sectors；JSON 兼容层；`NavClient` + `prompt_feedback`）
 - [x] CI：绕障、目标在障碍内（外移到机器人一侧）、延迟补偿、桌面悬空、不可达（RPP 两轮通过；MPPI 修正 `regenerate_noises` 后一轮通过）
 - [x] FAST_LIO 偶发启动段错误（上游 FAST_LIO_ROS2 #51）：自动重启 + `lio_bridge` 断档后用车轮里程计重新锚定 odom
-- [ ] 默认控制器 RPP / MPPI 待用户确认
+- [x] 默认控制器：用户确认保持 RPP（MPPI 保留为 `controller:=mppi`）；实验分支 `exp/nav-tuning` 保留供上机调参
 
 ### M7 可视化与工具
 - [x] RViz2 配置、Foxglove 布局、`viz.launch.py`、`record.launch.py`（mapping / nav / debug，MCAP）
